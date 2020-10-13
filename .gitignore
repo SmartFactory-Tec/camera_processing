@@ -1,0 +1,9 @@
+.vscode/*
+
+/pyimagesearch/__pycache__/
+
+# exclude everything
+/output/*
+
+# exception to the rule
+!output/.gitkeep 
