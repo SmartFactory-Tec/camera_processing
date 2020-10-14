@@ -13,7 +13,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-To run the people_counter.py script run the following commands, giving the protxt, caffemodel, input video and output destination as arguments.
+To run the people_counter.py script run the following line, giving the protxt, caffemodel, input video and output destination as arguments.
 ```bash
 python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt \
 
