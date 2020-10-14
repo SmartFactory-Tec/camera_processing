@@ -1,6 +1,6 @@
 .vscode/*
 
-/pyimagesearch/__pycache__/
+/pyimagesearch/__pycache__/*
 
 # exclude everything
 /output/*
