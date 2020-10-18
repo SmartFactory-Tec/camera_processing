@@ -261,7 +261,7 @@ while True:
 		writer.write(frame)
 
 	# show the output frame
-	cv2.imshow("Frame", frame)
+	# cv2.imshow("Frame", frame)
 	key = cv2.waitKey(1) & 0xFF
 
 	# if the `q` key was pressed, break from the loop
