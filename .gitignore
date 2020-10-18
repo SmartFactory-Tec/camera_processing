@@ -1,9 +1,13 @@
 .vscode/*
 
-/pyimagesearch/__pycache__/*
+pyimagesearch/__pycache__/
 
 # exclude everything
 /output/*
 
 # exception to the rule
-!output/.gitkeep 
+!output/.gitkeep
+!output/output_AWS_01.avi 
+
+# env
+people-counter/
