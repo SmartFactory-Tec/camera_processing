@@ -57,7 +57,15 @@ if not args.get("input", False):
 # otherwise, grab a reference to the video file
 else:
 	print("[INFO] opening video file...")
-	vs = cv2.VideoCapture(args["input"])
+	#input video (file)
+	#vs = cv2.VideoCapture(args["input"])
+	
+	#input video (local ip)
+
+	#vs = cv2.VideoCapture('http://192.168.1.71:8080/video')
+
+	#input video (public ip) MODIFY THIS LINE
+	#vs = cv2.VideoCapture('')
 
 # initialize the video writer (we'll instantiate later if need be)
 writer = None
