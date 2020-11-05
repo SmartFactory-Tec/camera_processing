@@ -20,7 +20,27 @@ import imutils
 import time
 import dlib
 import cv2
+import requests
+import threading
 
+	
+# defining the api-endpoint  
+API_ENDPOINT = "https://prod-64.westus.logic.azure.com:443/workflows/ff179f5e08284d08b4fcb35a025443a0/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g9033T7EODjg-A4GivUtOxNsLj08gWHomND-ALQXX1g"
+# data to be sent to api 
+data = {"cantidad": 3022,
+		"lugar": "Micasa2"
+		} 
+
+def callPost():
+	threading.Timer(3.0,callPost).start()
+	# sending post request and saving response as response object 
+	r = requests.post(API_ENDPOINT, json=data) 
+  
+	# extracting response text  
+	#responseReq = r.text 
+	#print(responseReq) 
+#Post Call
+callPost()
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-p", "--prototxt", required=True,
@@ -57,13 +77,12 @@ if not args.get("input", False):
 # otherwise, grab a reference to the video file
 else:
 	print("[INFO] opening video file...")
-	
 	#input video (file)
 	vs = cv2.VideoCapture(args["input"])
 	
 	#input video (local ip)
 
-	#vs = cv2.VideoCapture('rtsp://192.168.1.71:10554/h264_ulaw.sdp')
+	#vs = cv2.VideoCapture('http://192.168.1.71:8080/video')
 
 	#input video (public ip) MODIFY THIS LINE
 	#vs = cv2.VideoCapture('')
@@ -208,6 +227,9 @@ while True:
 	for (objectID, centroid) in objects.items():
 		# check to see if a trackable object exists for the current
 		# object ID
+		data = {"cantidad": len(objects.items()),
+				"lugar": "Prueba"
+				} 
 		to = trackableObjects.get(objectID, None)
 
 		# if there is no existing trackable object, create one
@@ -281,6 +303,13 @@ while True:
 	# then update the FPS counter
 	totalFrames += 1
 	fps.update()
+
+
+
+
+	
+  
+	
 
 # stop the timer and display FPS information
 fps.stop()
