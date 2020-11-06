@@ -56,9 +56,9 @@ ap.add_argument("-i", "--input", type=str,
 	help="path to optional input video file")
 ap.add_argument("-o", "--output", type=str,
 	help="path to optional output video file")
-ap.add_argument("-c", "--confidence", type=float, default=0.4,
+ap.add_argument("-c", "--confidence", type=float, default=0.25,
 	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--skip-frames", type=int, default=30,
+ap.add_argument("-s", "--skip-frames", type=int, default=40,
 	help="# of skip frames between detections")
 args = vars(ap.parse_args())
 
@@ -262,10 +262,10 @@ def gen_frames():
 			# otherwise, there is a trackable object so we can utilize it
 			# to determine direction
 			else:
-				# the difference between the y-coordinate of the current
+				# the difference between the x-coordinate of the current
 				# centroid and the mean of previous centroids will tell
 				# us in which direction the object is moving (negative for
-				# 'up' and positive for 'down')
+				# 'left' and positive for 'right')
 				x = [c[0] for c in to.centroids]
 				direction = centroid[0] - np.mean(x)
 				to.centroids.append(centroid)
