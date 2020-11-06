@@ -82,7 +82,7 @@ else:
 	print("[INFO] opening video file...")
 	#input video (file)
 	vs = cv2.VideoCapture(args["input"])
-	
+	vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
 	#input video (local ip)
 
 	#vs = cv2.VideoCapture('http://192.168.1.71:8080/video')
@@ -319,11 +319,11 @@ def gen_frames():
 
 		# show the output frame
 		# cv2.imshow("Frame", frame)
-		key = cv2.waitKey(1) & 0xFF
+		# key = cv2.waitKey(1) & 0xFF
 
 		# if the `q` key was pressed, break from the loop
-		if key == ord("q"):
-			break
+		# if key == ord("q"):
+		#	break
 
 		# increment the total number of frames processed thus far and
 		# then update the FPS counter
@@ -332,9 +332,10 @@ def gen_frames():
 
 	if args["output"] is None and writer is None:
 		vs = cv2.VideoCapture(args["input"])
+		vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
 		gen_frames()
-
-	end_process()
+	else:
+		end_process()
 
 def end_process():
 	global args
