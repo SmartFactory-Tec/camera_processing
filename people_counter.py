@@ -403,7 +403,7 @@ def index():
 if __name__ == '__main__':
 	genFrameTread = threading.Thread(target=gen_frames)
 	genFrameTread.start()
-	time.sleep(1)
+	time.sleep(2)
 	from waitress import serve
 	serve(app, host="0.0.0.0", port=8080)
 	
