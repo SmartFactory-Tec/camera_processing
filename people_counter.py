@@ -330,6 +330,10 @@ def gen_frames():
 		totalFrames += 1
 		fps.update()
 
+	if args["output"] is None and writer is None:
+		vs = cv2.VideoCapture(args["input"])
+		gen_frames()
+
 	end_process()
 
 def end_process():
