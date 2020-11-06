@@ -21,8 +21,28 @@ import imutils
 import time
 import dlib
 import cv2
+import requests
+import threading
 
 app = Flask(__name__)
+	
+# defining the api-endpoint  
+API_ENDPOINT = "https://prod-64.westus.logic.azure.com:443/workflows/ff179f5e08284d08b4fcb35a025443a0/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g9033T7EODjg-A4GivUtOxNsLj08gWHomND-ALQXX1g"
+
+# data to be sent to api 
+data = {
+	"cantidad" : 0,
+	"lugar" : "Camara 0"
+} 
+
+def callPost():
+	threading.Timer(3.0,callPost).start()
+	# sending post request and saving response as response object 
+	if(data["cantidad"] != 0 ):
+		r = requests.post(API_ENDPOINT, json=data) 
+  
+#Post Call
+callPost()
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
@@ -60,7 +80,15 @@ if not args.get("input", False):
 # otherwise, grab a reference to the video file
 else:
 	print("[INFO] opening video file...")
+	#input video (file)
 	vs = cv2.VideoCapture(args["input"])
+	
+	#input video (local ip)
+
+	#vs = cv2.VideoCapture('http://192.168.1.71:8080/video')
+
+	#input video (public ip) MODIFY THIS LINE
+	#vs = cv2.VideoCapture('')
 
 # initialize the video writer (we'll instantiate later if need be)
 writer = None
@@ -89,6 +117,7 @@ fps = FPS().start()
 def gen_frames():
 	global args
 	global CLASSES
+	global data
 	global net
 	global vs
 	global writer
@@ -215,6 +244,10 @@ def gen_frames():
 
 		# loop over the tracked objects
 		for (objectID, centroid) in objects.items():
+			data = {
+				"cantidad": len(objects.items()),
+				"lugar": "Camara 0"
+			}
 			# check to see if a trackable object exists for the current
 			# object ID
 			to = trackableObjects.get(objectID, None)

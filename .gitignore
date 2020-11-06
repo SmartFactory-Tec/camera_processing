@@ -11,3 +11,6 @@ pyimagesearch/__pycache__/
 
 # env
 people-counter/
+!output/.gitkeep 
+
+/app.py
