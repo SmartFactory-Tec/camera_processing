@@ -377,7 +377,6 @@ def show_frames():
 	global H
 	global W
 	while True:
-		print(len(last_frames))
 		if(len(last_frames)>=1):
 			ret, buffer = cv2.imencode('.jpg', last_frames[0])
 			frame_ready = buffer.tobytes()
