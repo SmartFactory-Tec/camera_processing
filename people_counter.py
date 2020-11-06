@@ -12,6 +12,7 @@
 # import the necessary packages
 from pyimagesearch.centroidtracker import CentroidTracker
 from pyimagesearch.trackableobject import TrackableObject
+from collections import deque
 from flask import Flask, render_template, Response
 from imutils.video import VideoStream
 from imutils.video import FPS
@@ -25,7 +26,8 @@ import requests
 import threading
 
 app = Flask(__name__)
-	
+last_frames = deque( maxlen=40 )
+
 # defining the api-endpoint  
 API_ENDPOINT = "https://prod-64.westus.logic.azure.com:443/workflows/ff179f5e08284d08b4fcb35a025443a0/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g9033T7EODjg-A4GivUtOxNsLj08gWHomND-ALQXX1g"
 
@@ -130,6 +132,7 @@ def gen_frames():
 	global trackableObjects
 	global W
 	global H
+	global last_frames
 	# loop over frames from the video stream
 	while True:
 		# grab the next frame and handle if we are reading from either
@@ -312,10 +315,7 @@ def gen_frames():
 			writer.write(frame)
 
 		#Publish frame in Server
-		ret, buffer = cv2.imencode('.jpg', frame)
-		frame_ready = buffer.tobytes()
-		yield (b'--frame\r\n'
-					 b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
+		last_frames.append(frame)
 
 		# show the output frame
 		# cv2.imshow("Frame", frame)
@@ -372,19 +372,39 @@ def end_process():
 	# close any open windows
 	cv2.destroyAllWindows()
 
-
+def show_frames():
+	global last_frames
+	global H
+	global W
+	while True:
+		if(len(last_frames)>=1):
+			ret, buffer = cv2.imencode('.jpg', last_frames[0])
+			frame_ready = buffer.tobytes()
+			yield (b'--frame\r\n'
+							b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
+		else:
+			ret, buffer = cv2.imencode('.jpg', np.zeros((H,W,3), np.uint8))
+			frame_ready = buffer.tobytes()
+			yield (b'--frame\r\n'
+							b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
+					
 @app.route('/camara0')
 def camara0():
-    #Video streaming route. Put this in the src attribute of an img tag
-    return Response(gen_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+	print("Start processing camara0 frames")
+	#Video streaming route. Put this in the src attribute of an img tag
+	return Response(show_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.route('/')
 def index():
-    """Video streaming home page."""
-    return render_template('index.html')
+	"""Video streaming home page."""
+	return render_template('index.html')
 
 
 if __name__ == '__main__':
-    from waitress import serve
-    serve(app, host="0.0.0.0", port=8080)
+	genFrameTread = threading.Thread(target=gen_frames)
+	genFrameTread.start()
+	time.sleep(1)
+	from waitress import serve
+	serve(app, host="0.0.0.0", port=8080)
+	
