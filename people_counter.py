@@ -26,7 +26,7 @@ import requests
 import threading
 
 app = Flask(__name__)
-last_frames = deque( maxlen=40 )
+last_frames = deque( maxlen=120 )
 
 # defining the api-endpoint  
 API_ENDPOINT = "https://prod-64.westus.logic.azure.com:443/workflows/ff179f5e08284d08b4fcb35a025443a0/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g9033T7EODjg-A4GivUtOxNsLj08gWHomND-ALQXX1g"
@@ -239,7 +239,7 @@ def gen_frames():
 		# draw a horizontal line in the center of the frame -- once an
 		# object crosses this line we will determine whether they were
 		# moving 'up' or 'down'
-		cv2.line(frame, (0, H // 2), (W, H // 2), (0, 255, 255), 2)
+		cv2.line(frame, (W//2, 0), (W // 2, H), (0, 255, 255), 2)
 
 		# use the centroid tracker to associate the (1) old object
 		# centroids with (2) the newly computed object centroids
@@ -262,12 +262,12 @@ def gen_frames():
 			# otherwise, there is a trackable object so we can utilize it
 			# to determine direction
 			else:
-				# the difference between the y-coordinate of the *current*
-				# centroid and the mean of *previous* centroids will tell
+				# the difference between the y-coordinate of the current
+				# centroid and the mean of previous centroids will tell
 				# us in which direction the object is moving (negative for
 				# 'up' and positive for 'down')
-				y = [c[1] for c in to.centroids]
-				direction = centroid[1] - np.mean(y)
+				x = [c[0] for c in to.centroids]
+				direction = centroid[0] - np.mean(x)
 				to.centroids.append(centroid)
 
 				# check to see if the object has been counted or not
@@ -275,14 +275,14 @@ def gen_frames():
 					# if the direction is negative (indicating the object
 					# is moving up) AND the centroid is above the center
 					# line, count the object
-					if direction < 0 and centroid[1] < H // 2:
+					if direction < 0 and centroid[0] < W // 2:
 						totalUp += 1
 						to.counted = True
 
 					# if the direction is positive (indicating the object
 					# is moving down) AND the centroid is below the
 					# center line, count the object
-					elif direction > 0 and centroid[1] > H // 2:
+					elif direction > 0 and centroid[0] > W // 2:
 						totalDown += 1
 						to.counted = True
 
@@ -299,8 +299,8 @@ def gen_frames():
 		# construct a tuple of information we will be displaying on the
 		# frame
 		info = [
-			("Up", totalUp),
-			("Down", totalDown),
+			("Izq", totalUp),
+			("Der", totalDown),
 			("Status", status),
 		]
 
