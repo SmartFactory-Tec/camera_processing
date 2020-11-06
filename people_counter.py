@@ -390,7 +390,6 @@ def show_frames():
 					
 @app.route('/camara0')
 def camara0():
-	print("Start processing camara0 frames")
 	#Video streaming route. Put this in the src attribute of an img tag
 	return Response(show_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
