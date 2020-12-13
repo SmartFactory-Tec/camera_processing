@@ -4,8 +4,6 @@
     "description" : "Campus Monterrey",
     "camaras" : [
       {
-        "refI" : 0,
-        "refO" : 0,
         "name" : "Entrada Norte", 
         "src" : "rtsp://10.13.118.14/stream1"
       }
@@ -16,8 +14,6 @@
     "description" : "Campus Guadalaja",
     "camaras" : [
       {
-        "refI" : 1,
-        "refO" : 1,
         "name" : "Entrada Sur", 
         "src" : "rtsp://10.13.118.14/stream2"
       }

@@ -371,11 +371,17 @@ def index():
 
 
 if __name__ == '__main__':
+	refI = 0
+	refE = 0
 	for location in inputSources:
+		refI = 0
 		for camara in inputSources[location]["camaras"]:
 			camaras.append(Camara(camara["src"]))
-	
-	print("Server 0.0.0.0:8080")
-	
+			camara["refI"] = refI
+			camara["refE"] = refE
+			refI += 1
+			refE += 1
+
+	print("Server 0.0.0.0:8080")	
 	from waitress import serve
 	serve(app, host="0.0.0.0", port=8080)

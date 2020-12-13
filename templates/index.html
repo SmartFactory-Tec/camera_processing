@@ -48,7 +48,7 @@
                     <div class="carousel-inner addFirst">
                         {%for camara in inputSources[location]["camaras"]%}
                         <div class="carousel-item">
-                            <img class="d-block w-100" src="{{ url_for('camaraStream',id = camara['refO'])}}" alt="{{camara['name']}}">
+                            <img class="d-block w-100" src="{{ url_for('camaraStream',id = camara['refE'])}}" alt="{{camara['name']}}">
                         </div>
                         {%endfor%}
                     </div>
