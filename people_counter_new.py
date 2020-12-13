@@ -26,12 +26,14 @@ import dlib
 import cv2
 import requests
 import threading
+import json
+
 
 # Construct the argument parse and parse the arguments.
 ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--prototxt", required=True,
+ap.add_argument("-p", "--prototxt", type=str, default="mobilenet_ssd/MobileNetSSD_deploy.prototxt",
 	help="path to Caffe 'deploy' prototxt file")
-ap.add_argument("-m", "--model", required=True,
+ap.add_argument("-m", "--model", type=str, default="mobilenet_ssd/MobileNetSSD_deploy.caffemodel",
 	help="path to Caffe pre-trained model")
 ap.add_argument("-i", "--input", type=str,
 	help="path to optional input video file")
@@ -43,11 +45,12 @@ ap.add_argument("-s", "--skip-frames", type=int, default=30,
 	help="# of skip frames between detections")
 args = vars(ap.parse_args())
 
-
 load_dotenv()
 app = Flask(__name__)
 
-inputSources = ["rtsp://10.13.118.14/stream1","rtsp://10.13.118.14/stream2"]
+with open('inputScript.json') as inputScript:
+  inputSources = json.load(inputScript)
+
 camaras = []
 
 class Camara:
@@ -364,19 +367,15 @@ def camaraStream(id):
 @app.route('/')
 def index():
 	"""Video streaming home page."""
-	return render_template('index.html')
+	return render_template('index.html', inputSources = inputSources)
 
 
 if __name__ == '__main__':
-	for inputSource in inputSources:
-  		camaras.append(Camara(inputSource))
-	
-	time.sleep(2)
+	for location in inputSources:
+		for camara in inputSources[location]["camaras"]:
+			camaras.append(Camara(camara["src"]))
 	
 	print("Server 0.0.0.0:8080")
 	
 	from waitress import serve
 	serve(app, host="0.0.0.0", port=8080)
-
-	
-	
