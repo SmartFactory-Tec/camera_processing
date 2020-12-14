@@ -306,8 +306,8 @@ class Camara:
 			# construct a tuple of information we will be displaying on the
 			# frame
 			info = [
-				("Izq a Der", self.totalUp),
-				("Der a Izq", self.totalDown),
+				("Der a Izq", self.totalUp),
+				("Izq a Der", self.totalDown),
 				("Status", self.status),
 				("FPS", int(self.fpsValue))
 			]
