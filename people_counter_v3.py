@@ -310,24 +310,19 @@ class Camara:
 			self.last_frames.append(frame)
 
 			# show the output frame
-			# cv2.imshow("Frame", frame)
-			# key = cv2.waitKey(1) & 0xFF
+			cv2.imshow("Frame", frame)
+			key = cv2.waitKey(1) & 0xFF
 
 			# if the `q` key was pressed, break from the loop
-			# if key == ord("q"):
-			#	break
+			if key == ord("q"):
+				break
 
 			# increment the total number of frames processed thus far and
 			# then update the FPS counter
 			self.totalFrames += 1
 			self.fps.update()
 
-		if args["output"] is None and self.writer is None:
-			self.vs = cv2.VideoCapture(self.inputSource)
-			self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-			self.gen_frames()
-		else:
-			self.end_process()
+		self.end_process()
 
 	def end_process(self):
 		# Stop the timer and display FPS information.
@@ -382,6 +377,6 @@ if __name__ == '__main__':
 			refI += 1
 			refE += 1
 
-	print("Server 0.0.0.0:8080")	
-	from waitress import serve
-	serve(app, host="0.0.0.0", port=8080)
+	# print("Server 0.0.0.0:8080")	
+	# from waitress import serve
+	# serve(app, host="0.0.0.0", port=8080)

@@ -8,15 +8,5 @@
         "src" : "rtsp://10.13.118.14/stream1"
       }
     ]
-  },
-  "GDA" : {
-    "name" : "Guadalaja",
-    "description" : "Campus Guadalaja",
-    "camaras" : [
-      {
-        "name" : "Entrada Sur", 
-        "src" : "rtsp://10.13.118.14/stream2"
-      }
-    ]
   }
 }

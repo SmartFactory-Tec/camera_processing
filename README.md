@@ -40,9 +40,9 @@ pip install -r requirements.txt
 
 ## Usage script v1.0
 
-Run people_counter.py script, giving the protxt, caffemodel, input video and output destination as arguments.
+Run people_counter_v1.py script, giving the protxt, caffemodel, input video and output destination as arguments.
 ```bash
-python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4 --output output/output_01.avi
+python people_counter_v1.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4 --output output/output_01.avi
 ```
 Then, you should see a window displaying the labeled video and an output in console similar to this
 
