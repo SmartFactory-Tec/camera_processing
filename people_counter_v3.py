@@ -41,7 +41,7 @@ ap.add_argument("-o", "--output", type=str,
 	help="path to optional output video file")
 ap.add_argument("-c", "--confidence", type=float, default=0.22,
 	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--skip-frames", type=int, default=45,
+ap.add_argument("-s", "--skip-frames", type=int, default=50,
 	help="# of skip frames between detections")
 args = vars(ap.parse_args())
 
@@ -103,7 +103,7 @@ class Camara:
 		self.totalDown = 0
 		self.totalUp = 0
 		self.status = "Waiting"
-		self.fpsValue = 0
+		self.fpsValue = 30
 
 		self.data = {
 			"cantidad" : 0,
@@ -137,8 +137,7 @@ class Camara:
 
 		self.fps = FPS().start()
 		
-		# FPS per 10s.
-		callFpsThread = threading.Timer(10.0, self.callFps, args=())
+		callFpsThread = threading.Timer(2.0, self.callFps, args=())
 		callFpsThread.start()
 
   
@@ -368,7 +367,7 @@ class Camara:
 				frame_ready = buffer.tobytes()
 				yield (b'--frame\r\n'
 								b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
-				
+		time.sleep(1 / self.fpsValue * 2)
 
 @app.route('/camara/<id>')
 def camaraStream(id):

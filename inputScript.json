@@ -6,16 +6,20 @@
       {
         "name" : "Entrada Norte", 
         "src" : "rtsp://10.13.118.14/stream1"
+      },
+      {
+        "name" : "Carreta", 
+        "src" : "rtsp://visitante1:visitante1@10.14.244.16/stream1"
       }
     ]
   },
-  "GDA" : {
-    "name" : "Guadalaja",
-    "description" : "Campus Guadalaja",
+  "VER" : {
+    "name" : "Veracruz",
+    "description" : "Casa Iqui Balam",
     "camaras" : [
       {
-        "name" : "Entrada Sur", 
-        "src" : "rtsp://10.13.118.14/stream2"
+        "name" : "Casa Iqui Balam", 
+        "src" : "http://201.111.9.177:10554/video"
       }
     ]
   }
