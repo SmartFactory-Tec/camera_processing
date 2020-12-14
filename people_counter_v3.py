@@ -39,9 +39,9 @@ ap.add_argument("-i", "--input", type=str,
 	help="path to optional input video file")
 ap.add_argument("-o", "--output", type=str,
 	help="path to optional output video file")
-ap.add_argument("-c", "--confidence", type=float, default=0.4,
+ap.add_argument("-c", "--confidence", type=float, default=0.22,
 	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--skip-frames", type=int, default=30,
+ap.add_argument("-s", "--skip-frames", type=int, default=45,
 	help="# of skip frames between detections")
 args = vars(ap.parse_args())
 
@@ -103,14 +103,16 @@ class Camara:
 		self.totalDown = 0
 		self.totalUp = 0
 		self.status = "Waiting"
+		self.fpsValue = 0
 
 		self.data = {
 			"cantidad" : 0,
 			"lugar" : self.camaraId
 		}
 
-		# start the frames per second throughput estimator
-		self.fps = FPS().start()
+		# Start the frames per second throughput estimator
+		self.fps = None
+		self.callFps()
 		
 		genFrameTread = threading.Thread(target=self.gen_frames, args=())
 		genFrameTread.start()
@@ -118,13 +120,27 @@ class Camara:
 		self.callPost()
 	
 	def callPost(self):
-		
+  		
 		callPostThread = threading.Timer(3.0, self.callPost, args=())
 		callPostThread.start()
 
 		# Sending post request and saving response as response object.
 		if self.data["cantidad"] != 0 :
-			requests.post(Camara.API_ENDPOINT, json=self.data) 
+			requests.post(Camara.API_ENDPOINT, json=self.data)
+
+	def callFps(self):	
+		if self.fps != None:
+			self.fps.stop()
+			print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
+			print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
+			self.fpsValue = self.fps.fps()
+
+		self.fps = FPS().start()
+		
+		# FPS per 10s.
+		callFpsThread = threading.Timer(10.0, self.callFps, args=())
+		callFpsThread.start()
+
   
 	def gen_frames(self):
 		# Loop over frames from the video stream.
@@ -291,9 +307,10 @@ class Camara:
 			# construct a tuple of information we will be displaying on the
 			# frame
 			info = [
-				("Izq", self.totalUp),
-				("Der", self.totalDown),
+				("Izq a Der", self.totalUp),
+				("Der a Izq", self.totalDown),
 				("Status", self.status),
+				("FPS", int(self.fpsValue))
 			]
 
 			# loop over the info tuples and draw them on our frame
@@ -310,12 +327,12 @@ class Camara:
 			self.last_frames.append(frame)
 
 			# show the output frame
-			cv2.imshow("Frame", frame)
-			key = cv2.waitKey(1) & 0xFF
+			# cv2.imshow("Frame", frame)
+			# key = cv2.waitKey(1) & 0xFF
 
 			# if the `q` key was pressed, break from the loop
-			if key == ord("q"):
-				break
+			# if key == ord("q"):
+			# 	break
 
 			# increment the total number of frames processed thus far and
 			# then update the FPS counter
@@ -377,6 +394,8 @@ if __name__ == '__main__':
 			refI += 1
 			refE += 1
 
-	# print("Server 0.0.0.0:8080")	
-	# from waitress import serve
-	# serve(app, host="0.0.0.0", port=8080)
+	print("Server 0.0.0.0:8080")	
+	from waitress import serve
+	app.debug=True
+	app.use_reloader=False
+	serve(app, host="0.0.0.0", port=8080)

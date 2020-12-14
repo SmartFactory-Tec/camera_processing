@@ -51,9 +51,9 @@ ap.add_argument("-i", "--input", type=str,
 	help="path to optional input video file")
 ap.add_argument("-o", "--output", type=str,
 	help="path to optional output video file")
-ap.add_argument("-c", "--confidence", type=float, default=0.4,
+ap.add_argument("-c", "--confidence", type=float, default=0.2,
 	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--skip-frames", type=int, default=30,
+ap.add_argument("-s", "--skip-frames", type=int, default=60,
 	help="# of skip frames between detections")
 args = vars(ap.parse_args())
 
@@ -171,7 +171,7 @@ while True:
 				# extract the index of the class label from the
 				# detections list
 				idx = int(detections[0, 0, i, 1])
-
+			
 				# if the class label is not a person, ignore it
 				if CLASSES[idx] != "person":
 					continue
