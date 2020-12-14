@@ -15,7 +15,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.0/umd/popper.min.js" integrity="sha384-cs/chFZiN24E4KMATLdqdvsezGxaGsi4hLGOzlXwp5UZB1LY//20VyM2taTB4QvJ" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.0/js/bootstrap.min.js" integrity="sha384-uefMccjFJAIv6A+rW+L4AHf99KvxDjWSu1z9VI8SKNVmz4sk7buKt/6v9KI65qnm" crossorigin="anonymous"></script>
     <!-- <script src="{{ url_for('static', filename='js/index.js') }}"></script> -->
-    
+    <script src="https://statics.teams.microsoft.com/sdk/v1.5.2/js/MicrosoftTeams.min.js" crossorigin="anonymous"></script>
+
     <title>Video Live Streaming</title>
 </head>
 <body>
@@ -67,6 +68,7 @@
     </div>
 
     <script>
+        microsoftTeams.initialize()
         $(".carousel-control-prev").on("click",function(){
             const countChilds = $(this).siblings(".carousel-inner").children().length;
             const id = $(this).siblings(".carousel-inner").find(".active").index() + 1;

@@ -337,8 +337,13 @@ class Camara:
 			# then update the FPS counter
 			self.totalFrames += 1
 			self.fps.update()
-
-		self.end_process()
+		
+		if "videos" in self.inputSource:
+			self.end_process()
+		else:
+			vs = cv2.VideoCapture(args["input"])
+			vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+			gen_frames()
 
 	def end_process(self):
 		# Stop the timer and display FPS information.
