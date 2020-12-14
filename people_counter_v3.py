@@ -341,16 +341,11 @@ class Camara:
 		if "videos" in self.inputSource:
 			self.end_process()
 		else:
-			vs = cv2.VideoCapture(args["input"])
-			vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-			gen_frames()
+			self.vs = cv2.VideoCapture(self.inputSource)
+			self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+			self.gen_frames()
 
 	def end_process(self):
-		# Stop the timer and display FPS information.
-		self.fps.stop()
-		print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
-		print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
-
 		# check to see if we need to release the video writer pointer
 		if self.writer is not None:
 			self.writer.release()
