@@ -13,13 +13,17 @@
       }
     ]
   },
-  "VER" : {
-    "name" : "Veracruz",
-    "description" : "Casa Iqui Balam",
+  "GDA" : {
+    "name" : "Monterrey v2",
+    "description" : "Campus Monterrey",
     "camaras" : [
       {
-        "name" : "Casa Iqui Balam", 
-        "src" : "http://201.111.9.177:10554/video"
+        "name" : "Entrada Norte", 
+        "src" : "rtsp://10.13.118.14/stream2"
+      },
+      {
+        "name" : "Carreta", 
+        "src" : "rtsp://visitante1:visitante1@10.14.244.16/stream2"
       }
     ]
   }
