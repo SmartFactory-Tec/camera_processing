@@ -30,7 +30,7 @@ class CentroidTracker:
 		# when registering an object we use the next available object
 		# ID to store the centroid
 		self.objects["centroid"][self.nextObjectID] = centroid
-		self.objects["rect"][self.nextObjectID] = centroid
+		self.objects["rect"][self.nextObjectID] = rect
 		self.disappeared[self.nextObjectID] = 0
 		self.nextObjectID += 1
 
