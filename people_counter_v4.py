@@ -244,7 +244,7 @@ class Camara:
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
-			objects = self.ct.update(rects)
+			objects = self.ct.update(rects)["centroid"]
 
 			# loop over the tracked objects
 			for (objectID, centroid) in objects.items():
