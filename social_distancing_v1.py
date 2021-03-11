@@ -12,6 +12,7 @@
 # import the necessary packages
 from pyimagesearch.centroidtracker import CentroidTracker
 from pyimagesearch.trackableobject import TrackableObject
+from scipy.spatial import distance as dist
 from imutils.video import VideoStream
 from imutils.video import FPS
 import numpy as np
@@ -22,6 +23,11 @@ import dlib
 import cv2
 import requests
 import threading
+import itertools
+import math
+
+COLOR_RED = (0, 0, 255)
+COLOR_GREEN = (0, 255, 0)
 
 	
 # defining the api-endpoint  
@@ -107,6 +113,7 @@ trackableObjects = {}
 totalFrames = 0
 totalDown = 0
 totalUp = 0
+totalDistanceViolations = 0
 
 # start the frames per second throughput estimator
 fps = FPS().start()
@@ -225,8 +232,30 @@ while True:
 	objects = object_position_data["centroid"]
 	points = object_position_data["rect"]
 
+	# ensure there are *at least* two people detections (required in
+	# order to compute our pairwise distance maps)
+	violate = set()
+	if len(objects) >= 2:
+		# extract all centroids from the results and compute the
+		# Euclidean distances between all pairs of the centroids
+		centroids = objects.values()
+		np_centroids = np.array(list(centroids))
+		D = dist.cdist(np_centroids, np_centroids, metric="euclidean")
+
+		# loop over the upper triangular of the distance matrix
+		for i in range(0, D.shape[0]):
+			for j in range(i + 1, D.shape[1]):
+				# check to see if the distance between any two
+				# centroid pairs is less than the configured number
+				# of pixels
+				if D[i, j] < 120:
+					# update our violation set with the indexes of
+					# the centroid pairs
+					violate.add(i)
+					violate.add(j)
+
 	# loop over the tracked objects
-	for (objectID, centroid) in objects.items():
+	for (i, (objectID, centroid)) in enumerate(objects.items()):
 		data = {
 			"cantidad": len(objects.items()),
 			"lugar": "Camara 0"
@@ -255,12 +284,17 @@ while True:
 				if direction < 0 and centroid[0] < W // 2:
 					totalUp += 1
 					to.counted = True
+					if i in violate:
+						totalDistanceViolations += 1
 				# if the direction is positive (indicating the object
 				# is moving down) AND the centroid is below the
 				# center line, count the object
 				elif direction > 0 and centroid[0] > W // 2:
 					totalDown += 1
 					to.counted = True
+					if i in violate:
+						totalDistanceViolations += 1
+
 		# store the trackable object in our dictionary
 		trackableObjects[objectID] = to
 		# draw both the ID of the object and the centroid of the
@@ -268,16 +302,24 @@ while True:
 		x_start, y_start, x_end, y_end = points[objectID]
 
 		text = "ID {}".format(objectID)
+		color = COLOR_GREEN
+
+		if i in violate:
+			color = COLOR_RED
+
 		cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-		cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
-		cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), (0, 255, 0), 1)
+			cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+		cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
+		cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
+
 	# construct a tuple of information we will be displaying on the
 	# frame
+	# consider every violation as one, no matter the ammount of people
 	info = [
 		("Izq", totalUp),
 		("Der", totalDown),
 		("Status", status),
+		("Distance Violations", math.ceil(totalDistanceViolations/2))
 	]
 
 	# loop over the info tuples and draw them on our frame
