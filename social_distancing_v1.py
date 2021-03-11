@@ -28,6 +28,7 @@ import math
 
 COLOR_RED = (0, 0, 255)
 COLOR_GREEN = (0, 255, 0)
+COLOR_BLACK = (0, 0, 0)
 
 	
 # defining the api-endpoint  
@@ -307,8 +308,9 @@ while True:
 		if i in violate:
 			color = COLOR_RED
 
-		cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-			cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+		cv2.rectangle(frame, (x_start, y_start), (x_start + 50, y_start + 20), color, -1)
+		cv2.putText(frame, text, (x_start + 5, y_start + 15),
+			cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_BLACK, 2)
 		cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 		cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
