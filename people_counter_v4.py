@@ -30,6 +30,7 @@ import requests
 import threading
 import json
 import ctypes
+import math
 
 # Construct the argument parse and parse the arguments.
 ap = argparse.ArgumentParser()
@@ -104,6 +105,7 @@ class Camara:
 		self.status = "Waiting"
 		self.fpsValue = 30
 
+		# counter for social distance violations
 		self.totalDistanceViolations = 0
 
 		self.data = {
@@ -111,6 +113,8 @@ class Camara:
 			"lugar" : self.camaraId
 		}
 
+		# colors for the centroid and bounding box of  
+		# every detected object in camera
 		self.COLOR_RED = (0, 0, 255)
 		self.COLOR_GREEN = (0, 255, 0)
 		self.COLOR_BLACK = (0, 0, 0)
@@ -144,6 +148,19 @@ class Camara:
 		callFpsThread = threading.Timer(2.0, self.callFps, args=())
 		callFpsThread.start()
 
+	'''
+	Function to get the social distance violations based on the position
+	of the centroids detected in the frame.
+
+	@objects (array): centroids (tuple) for every detected object.
+	@return (set)		: coordinates of the centroids that violate
+										social distancing.
+
+	TODO
+		Implement Bird Eye View (also called Inverse Perspective Mapping) for 
+		better accuracy on social distancing violation detections.
+		https://developer.ridgerun.com/wiki/index.php?title=Birds_Eye_View/Introduction/Research
+	'''
 	def get_social_distance_violations(self, objects):
 		# ensure there are *at least* two people detections (required in
 		# order to compute our pairwise distance maps)
@@ -319,6 +336,7 @@ class Camara:
 							to.counted = True
 							if i in violate:
 								self.totalDistanceViolations += 1
+								violate.remove(i)
 
 						# if the direction is positive (indicating the object
 						# is moving down) AND the centroid is below the
@@ -328,6 +346,7 @@ class Camara:
 							to.counted = True
 							if i in violate:
 								self.totalDistanceViolations += 1
+								violate.remove(i)
 
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
@@ -349,12 +368,13 @@ class Camara:
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
 			# construct a tuple of information we will be displaying on the
-			# frame
+			# frame. We want to consider every social distance violation as a
+			# requirement of at least two people violation the rule.
 			info = [
 				("Der a Izq", self.totalUp),
 				("Izq a Der", self.totalDown),
 				("Status", self.status),
-				("Distance Violations", self.totalDistanceViolations),
+				("Distance Violations", math.ceil(self.totalDistanceViolations/2)),
 				("FPS", int(self.fpsValue))
 			]
 
