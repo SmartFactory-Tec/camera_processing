@@ -107,6 +107,7 @@ class Camara:
 
 		# counter for social distance violations
 		self.totalDistanceViolations = 0
+		self.socialDistanceThreshold = 120 # distance in pixels for SD violation
 
 		self.data = {
 			"cantidad" : 0,
@@ -178,7 +179,7 @@ class Camara:
 					# check to see if the distance between any two
 					# centroid pairs is less than the configured number
 					# of pixels
-					if D[i, j] < 120:
+					if D[i, j] < self.socialDistanceThreshold:
 						# update our violation set with the indexes of
 						# the centroid pairs
 						point_violations.add(i)
