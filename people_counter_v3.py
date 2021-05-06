@@ -48,7 +48,7 @@ args = vars(ap.parse_args())
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript.json') as inputScript:
+with open('inputScript_TestVideo.json') as inputScript:
   inputSources = json.load(inputScript)
 
 camaras = []
@@ -59,10 +59,9 @@ class Camara:
 	API_ENDPOINT = os.getenv("API_ENDPOINT")
 	
 	# Initialize list of class labels MobileNet SSD was trained to detect
-	CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
-		"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
-		"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
-		"sofa", "train", "tvmonitor"]
+	CLASSES = None
+	with open('yolo/coco.names', 'r') as f:
+		CLASSES = [line.strip() for line in f.readlines()]
 	
 	camaraCounter = 0
 
@@ -74,7 +73,7 @@ class Camara:
 		self.last_frames = deque( maxlen=120 )
 		
 		# Load Model
-		self.net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
+		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.weights', 'yolo/yolov3.cfg')
   	
 		self.inputSource = inputSource
 		
@@ -184,9 +183,13 @@ class Camara:
 
 				# convert the frame to a blob and pass the blob through the
 				# network and obtain the detections
-				blob = cv2.dnn.blobFromImage(frame, 0.007843, (self.W, self.H), 127.5)
+				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (self.W, self.H), 127.5, swapRB=True, crop=False)
 				self.net.setInput(blob)
-				detections = self.net.forward()
+
+				layer_names = self.net.getLayerNames()
+				output_layers = [layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+
+				detections = self.net.forward(output_layers)
 
 				# loop over the detections
 				for i in np.arange(0, detections.shape[2]):

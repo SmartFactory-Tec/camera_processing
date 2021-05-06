@@ -17,3 +17,6 @@ people-counter/
 /app.py
 
 videos/social-distance-test.mp4
+
+#yolo model
+yolo/yolov3.weights
