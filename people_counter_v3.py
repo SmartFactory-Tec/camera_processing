@@ -73,7 +73,7 @@ class Camara:
 		self.last_frames = deque( maxlen=120 )
 		
 		# Load Model
-		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.weights', 'yolo/yolov3.cfg')
+		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
   	
 		self.inputSource = inputSource
 		
@@ -183,7 +183,7 @@ class Camara:
 
 				# convert the frame to a blob and pass the blob through the
 				# network and obtain the detections
-				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (self.W, self.H), 127.5, swapRB=True, crop=False)
+				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), 127.5, swapRB=True, crop=False)
 				self.net.setInput(blob)
 
 				layer_names = self.net.getLayerNames()
