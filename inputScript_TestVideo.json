@@ -5,7 +5,7 @@
     "camaras" : [
       {
         "name": "Test - Entrada Norte",
-        "src": "./videos/social-distance-test.mp4"
+        "src": "videos/peoplewalking.mp4"
       }
     ]
   }

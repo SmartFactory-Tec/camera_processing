@@ -123,10 +123,6 @@ class Camara:
 		callPostThread = threading.Timer(3.0, self.callPost, args=())
 		callPostThread.start()
 
-		# Sending post request and saving response as response object.
-		if self.data["cantidad"] != 0 :
-			requests.post(Camara.API_ENDPOINT, json=self.data)
-
 	def callFps(self):	
 		if self.fps != None:
 			self.fps.stop()
@@ -139,7 +135,28 @@ class Camara:
 		callFpsThread = threading.Timer(2.0, self.callFps, args=())
 		callFpsThread.start()
 
-  
+	def generate_boxes_confidences_classids(self, outs):
+		boxes = []
+		confidences = []
+		classids = []
+
+		for out in outs:
+				for detection in out:
+					# Get the scores, classid, and the confidence of the prediction
+					scores = detection[5:]
+					classid = np.argmax(scores)
+					confidence = scores[classid]				
+
+					# Append to list
+					boxes.append(detection[0:4])
+					confidences.append(confidence)
+					classids.append(classid)
+
+					#print(scores, classid, confidence)
+
+		return boxes, confidences, classids
+
+
 	def gen_frames(self):
 		# Loop over frames from the video stream.
 		while True:
@@ -191,18 +208,22 @@ class Camara:
 
 				detections = self.net.forward(output_layers)
 
+				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections)
+				#self.get_detections()
+				print(len(boxes), len(confidences), len(classids))
+
 				# loop over the detections
-				for i in np.arange(0, detections.shape[2]):
+				for i in range(len(boxes)):
 					# extract the confidence (i.e., probability) associated
 					# with the prediction
-					confidence = detections[0, 0, i, 2]
+					confidence = confidences[i]
 
 					# filter out weak detections by requiring a minimum
 					# confidence
 					if confidence > args["confidence"]:
 						# extract the index of the class label from the
 						# detections list
-						idx = int(detections[0, 0, i, 1])
+						idx = int(classids[i])
 
 						# if the class label is not a person, ignore it
 						if Camara.CLASSES[idx] != "person":
@@ -210,12 +231,18 @@ class Camara:
 
 						# compute the (x, y)-coordinates of the bounding box
 						# for the object
-						box = detections[0, 0, i, 3:7] * np.array([self.W, self.H, self.W, self.H])
-						(startX, startY, endX, endY) = box.astype("int")
+						box = np.array(boxes[i]) * np.array([self.W, self.H, self.W, self.H])
+						(centerX, centerY, width, height) = box.astype("int")
+						#print(confidence, Camara.CLASSES[idx], box)
+
+						startX = int(centerX - (width / 2))
+						startY = int(centerY - (height / 2))
+						endX = startX + width
+						endY = startY + height
 
 						# construct a dlib rectangle object from the bounding
 						# box coordinates and then start the dlib correlation
-						# tracker
+						# tracker`
 						tracker = dlib.correlation_tracker()
 						rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
 						tracker.start_track(rgb, rect)
@@ -224,27 +251,27 @@ class Camara:
 						# utilize it during skip frames
 						self.trackers.append(tracker)
 
-			# otherwise, we should utilize our object *trackers* rather than
-			# object *detectors* to obtain a higher frame processing throughput
-			else:
-				# loop over the trackers
-				for tracker in self.trackers:
-					# set the status of our system to be 'tracking' rather
-					# than 'waiting' or 'detecting'
-					self.status = "Tracking"
+					# otherwise, we should utilize our object *trackers* rather than
+					# object *detectors* to obtain a higher frame processing throughput
+					else:
+						# loop over the trackers
+						for tracker in self.trackers:
+							# set the status of our system to be 'tracking' rather
+							# than 'waiting' or 'detecting'
+							self.status = "Tracking"
 
-					# update the tracker and grab the updated position
-					tracker.update(rgb)
-					pos = tracker.get_position()
+							# update the tracker and grab the updated position
+							tracker.update(rgb)
+							pos = tracker.get_position()
 
-					# unpack the position object
-					startX = int(pos.left())
-					startY = int(pos.top())
-					endX = int(pos.right())
-					endY = int(pos.bottom())
+							# unpack the position object
+							startX = int(pos.left())
+							startY = int(pos.top())
+							endX = int(pos.right())
+							endY = int(pos.bottom())
 
-					# add the bounding box coordinates to the rectangles list
-					rects.append((startX, startY, endX, endY))
+							# add the bounding box coordinates to the rectangles list
+							rects.append((startX, startY, endX, endY))
 
 			# draw a horizontal line in the center of the frame -- once an
 			# object crosses this line we will determine whether they were
