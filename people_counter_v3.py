@@ -89,6 +89,9 @@ class Camara:
 		self.W = None
 		self.H = None
 
+		# Non maxima supression threshold
+		self.NMS_THRESH = 0.3
+
 		# Instantiate our centroid tracker, then initialize a list to store
 		# each of our dlib correlation trackers, followed by a dictionary to
 		# map each unique object ID to a TrackableObject
@@ -135,7 +138,7 @@ class Camara:
 		callFpsThread = threading.Timer(2.0, self.callFps, args=())
 		callFpsThread.start()
 
-	def generate_boxes_confidences_classids(self, outs):
+	def generate_boxes_confidences_classids(self, outs, threshold):
 		boxes = []
 		confidences = []
 		classids = []
@@ -147,10 +150,21 @@ class Camara:
 					classid = np.argmax(scores)
 					confidence = scores[classid]				
 
-					# Append to list
-					boxes.append(detection[0:4])
-					confidences.append(confidence)
-					classids.append(classid)
+					if confidence > threshold:
+
+						# compute the (x, y)-coordinates of the bounding box
+							# for the object
+						box = np.array(detection[0:4]) * np.array([self.W, self.H, self.W, self.H])
+						(centerX, centerY, width, height) = box.astype("int")
+						#print(confidence, Camara.CLASSES[idx], box)
+
+						startX = int(centerX - (width / 2))
+						startY = int(centerY - (height / 2))
+
+						# Append to list
+						boxes.append([startX, startY, int(width), int(height)])
+						confidences.append(float(confidence))
+						classids.append(classid)
 
 					#print(scores, classid, confidence)
 
@@ -208,70 +222,65 @@ class Camara:
 
 				detections = self.net.forward(output_layers)
 
-				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections)
-				#self.get_detections()
-				print(len(boxes), len(confidences), len(classids))
+				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, args["confidence"])
 
-				# loop over the detections
-				for i in range(len(boxes)):
-					# extract the confidence (i.e., probability) associated
-					# with the prediction
-					confidence = confidences[i]
+				idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"], self.NMS_THRESH)
 
-					# filter out weak detections by requiring a minimum
-					# confidence
-					if confidence > args["confidence"]:
-						# extract the index of the class label from the
-						# detections list
-						idx = int(classids[i])
+				if len(idxs) > 0:
+					# loop over the indexes we are keeping
+					for i in idxs.flatten():
+						# extract the confidence (i.e., probability) associated
+						# with the prediction
+						confidence = confidences[i]
 
-						# if the class label is not a person, ignore it
-						if Camara.CLASSES[idx] != "person":
-							continue
+						# filter out weak detections by requiring a minimum
+						# confidence
+						if confidence > args["confidence"]:
+							# extract the index of the class label from the
+							# detections list
+							idx = int(classids[i])
 
-						# compute the (x, y)-coordinates of the bounding box
-						# for the object
-						box = np.array(boxes[i]) * np.array([self.W, self.H, self.W, self.H])
-						(centerX, centerY, width, height) = box.astype("int")
-						#print(confidence, Camara.CLASSES[idx], box)
+							# if the class label is not a person, ignore it
+							if Camara.CLASSES[idx] != "person":
+								continue
 
-						startX = int(centerX - (width / 2))
-						startY = int(centerY - (height / 2))
-						endX = startX + width
-						endY = startY + height
+							startX, startY, width, height = boxes[i]
 
-						# construct a dlib rectangle object from the bounding
-						# box coordinates and then start the dlib correlation
-						# tracker`
-						tracker = dlib.correlation_tracker()
-						rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
-						tracker.start_track(rgb, rect)
+							endX = startX + width
+							endY = startY + height
 
-						# add the tracker to our list of trackers so we can
-						# utilize it during skip frames
-						self.trackers.append(tracker)
+							# construct a dlib rectangle object from the bounding
+							# box coordinates and then start the dlib correlation
+							# tracker`
+							tracker = dlib.correlation_tracker()
+							rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
+							tracker.start_track(rgb, rect)
 
-					# otherwise, we should utilize our object *trackers* rather than
-					# object *detectors* to obtain a higher frame processing throughput
-					else:
-						# loop over the trackers
-						for tracker in self.trackers:
-							# set the status of our system to be 'tracking' rather
-							# than 'waiting' or 'detecting'
-							self.status = "Tracking"
+							# add the tracker to our list of trackers so we can
+							# utilize it during skip frames
+							self.trackers.append(tracker)
 
-							# update the tracker and grab the updated position
-							tracker.update(rgb)
-							pos = tracker.get_position()
+			# otherwise, we should utilize our object *trackers* rather than
+			# object *detectors* to obtain a higher frame processing throughput
+			else:
+				# loop over the trackers
+				for tracker in self.trackers:
+					# set the status of our system to be 'tracking' rather
+					# than 'waiting' or 'detecting'
+					self.status = "Tracking"
 
-							# unpack the position object
-							startX = int(pos.left())
-							startY = int(pos.top())
-							endX = int(pos.right())
-							endY = int(pos.bottom())
+					# update the tracker and grab the updated position
+					tracker.update(rgb)
+					pos = tracker.get_position()
 
-							# add the bounding box coordinates to the rectangles list
-							rects.append((startX, startY, endX, endY))
+					# unpack the position object
+					startX = int(pos.left())
+					startY = int(pos.top())
+					endX = int(pos.right())
+					endY = int(pos.bottom())
+
+					# add the bounding box coordinates to the rectangles list
+					rects.append((startX, startY, endX, endY))
 
 			# draw a horizontal line in the center of the frame -- once an
 			# object crosses this line we will determine whether they were
@@ -280,7 +289,9 @@ class Camara:
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
-			objects = self.ct.update(rects)["centroid"]
+			object_position_data = self.ct.update(rects)
+			objects = object_position_data["centroid"]
+			points = object_position_data["rect"]
 
 			# loop over the tracked objects
 			for (objectID, centroid) in objects.items():
@@ -326,12 +337,16 @@ class Camara:
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
 
-				# draw both the ID of the object and the centroid of the
-				# object on the output frame
+				x_start, y_start, x_end, y_end = points[objectID]
+
 				text = "ID {}".format(objectID)
-				cv2.putText(frame, text, (centroid[0] - 10, centroid[1] - 10),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-				cv2.circle(frame, (centroid[0], centroid[1]), 4, (0, 255, 0), -1)
+				color = (0, 255, 0)
+
+				cv2.rectangle(frame, (x_start, y_start), (x_start + 50, y_start + 20), color, -1)
+				cv2.putText(frame, text, (x_start + 5, y_start + 15),
+					cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+				cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
+				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
 			# construct a tuple of information we will be displaying on the
 			# frame
