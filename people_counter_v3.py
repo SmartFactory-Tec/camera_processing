@@ -153,10 +153,9 @@ class Camara:
 					if confidence > threshold:
 
 						# compute the (x, y)-coordinates of the bounding box
-							# for the object
+						# for the object
 						box = np.array(detection[0:4]) * np.array([self.W, self.H, self.W, self.H])
 						(centerX, centerY, width, height) = box.astype("int")
-						#print(confidence, Camara.CLASSES[idx], box)
 
 						startX = int(centerX - (width / 2))
 						startY = int(centerY - (height / 2))
@@ -166,7 +165,6 @@ class Camara:
 						confidences.append(float(confidence))
 						classids.append(classid)
 
-					#print(scores, classid, confidence)
 
 		return boxes, confidences, classids
 
