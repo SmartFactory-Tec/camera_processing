@@ -48,7 +48,7 @@ args = vars(ap.parse_args())
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript_TestVideo.json') as inputScript:
+with open('inputScript_.json') as inputScript:
   inputSources = json.load(inputScript)
 
 camaras = []
