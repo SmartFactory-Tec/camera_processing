@@ -10,7 +10,7 @@ pyimagesearch/__pycache__/
 !output/output_AWS_01.avi 
 
 # env
-env
+.env
 people-counter/
 !output/.gitkeep 
 
