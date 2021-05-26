@@ -1,15 +1,7 @@
 # USAGE
-# To read and write back out to video:
-# python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt \
-#	--model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/example_01.mp4 \
-#	--output output/output_01.avi
-#
-# To read from webcam and write back out to disk:
-# python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt \
-#	--model mobilenet_ssd/MobileNetSSD_deploy.caffemodel \
-#	--output output/webcam_output.avi
+# python3 people_counter_v4.py
 
-# import the necessary packages
+# Import Dependencies
 from multiprocessing import Process, Array
 from pyimagesearch.centroidtracker import CentroidTracker
 from pyimagesearch.trackableobject import TrackableObject
@@ -31,50 +23,47 @@ import threading
 import json
 import ctypes
 import math
+import socketio
+import socket
 
-# Construct the argument parse and parse the arguments.
-ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--prototxt", type=str, default="mobilenet_ssd/MobileNetSSD_deploy.prototxt",
-	help="path to Caffe 'deploy' prototxt file")
-ap.add_argument("-m", "--model", type=str, default="mobilenet_ssd/MobileNetSSD_deploy.caffemodel",
-	help="path to Caffe pre-trained model")
-ap.add_argument("-i", "--input", type=str,
-	help="path to optional input video file")
-ap.add_argument("-o", "--output", type=str,
-	help="path to optional output video file")
-ap.add_argument("-c", "--confidence", type=float, default=0.22,
-	help="minimum probability to filter weak detections")
-ap.add_argument("-s", "--skip-frames", type=int, default=35,
-	help="# of skip frames between detections")
-args = vars(ap.parse_args())
+BACK_AVAILABLE = False
+VERBOSE = False
+CONFIDENCE_ = 0.4
+SKIP_FRAMES_ = 25
+MAX_FPS = 60
 
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript.json') as inputScript:
+with open('inputScript_TestVideo.json') as inputScript:
   inputSources = json.load(inputScript)
 
-
-# Use the following lines to run with test video instead of live input
-#with open('inputScript_TestVideo.json') as inputScript:
-#  inputSources = json.load(inputScript)
-
-
 class Camara:
-	
 	API_ENDPOINT = os.getenv("API_ENDPOINT")
+	COLOR_RED = (0, 0, 255)
+	COLOR_GREEN = (0, 255, 0)
+	COLOR_BLACK = (0, 0, 0)
+	socialDistanceThreshold = 120
+	
+	sio = socketio.Client()
 	
 	# Initialize list of class labels MobileNet SSD was trained to detect
 	CLASSES = None
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, inputSource, args, inputFrame, frameShape):
+	def __init__(self, id, inputSource, inputFrame, frameShape):
+		self.id = id
+		self.idDb = 0
 		self.camaraId = "Camara" + str(id)
 		
-			# Load Model
+		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
-  	
+
+  	# Get the output layer names of the model
+		self.layer_names = self.net.getLayerNames()
+		self.layer_names = [self.layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+
 		self.inputSource = inputSource
 		
 		print("[INFO] opening video file...")
@@ -107,37 +96,68 @@ class Camara:
 		self.status = "Waiting"
 		self.fpsValue = 30
 
-		# counter for social distance violations
+		# Counter for social distance violations.
 		self.totalDistanceViolations = 0
-		self.socialDistanceThreshold = 120 # distance in pixels for SD violation
 
 		self.data = {
-			"cantidad" : 0,
-			"lugar" : self.camaraId
+			"in_direction": 0,
+			"out_direction": 0,
+			"counter": 0,
+			"social_distancing_v": 0,
+			"fps": 0,
 		}
-
-		# colors for the centroid and bounding box of  
-		# every detected object in camera
-		self.COLOR_RED = (0, 0, 255)
-		self.COLOR_GREEN = (0, 255, 0)
-		self.COLOR_BLACK = (0, 0, 0)
 
 		# Start the frames per second throughput estimator
 		self.fps = None
 		callFpsThread = threading.Thread(target=self.callFps, args=())
 		callFpsThread.start()
 
-		callPostThread = threading.Thread(target=self.callPost, args=())
-		callPostThread.start()
-		
+
+		if BACK_AVAILABLE:
+			self.sioConnected = False
+			self.sio.on('connect', self.connectSIO)
+			self.sio.on('disconnect', self.disconnectSIO)
+			self.sio.on('visionInit', self.visionInitSIO)
+			self.sio.connect('http://covid-response-back.herokuapp.com/')
+
 		sharedFrame = np.frombuffer(inputFrame, dtype=np.uint8)
 		sharedFrame = sharedFrame.reshape(frameShape)    
 		self.gen_frames(sharedFrame)
 	
+	def connectSIO(self):
+		self.sioConnected = True
+		print('Connection Established.')
+		quantityCamaras = 1
+		self.sio.emit('visionInit', quantityCamaras)
+
+	def disconnectSIO(self):
+		self.sioConnected = False
+	
+	def visionInitSIO(self, camaraInfo):
+		print('CamaraInfo ', camaraInfo)
+		self.idDb = camaraInfo[0]['id']
+		self.sio.emit('updateCamara', data=(
+			self.idDb, 
+			'http://' + socket.getfqdn() + ':8080/camara/' + str(self.id)
+		))
+
+		callPostThread = threading.Thread(target=self.callPost, args=())
+		callPostThread.start()
+
 	def callPost(self):
-  		
 		callPostThread = threading.Timer(3.0, self.callPost, args=())
 		callPostThread.start()
+		
+		# Sending Camara Data
+		if self.data["counter"] != 0 and self.sioConnected:
+			self.sio.emit('visionPost', data=(
+				self.idDb,
+				self.data["in_direction"],
+				self.data["out_direction"],
+				self.data["counter"],
+				self.data["social_distancing_v"],
+				self.data["fps"],
+			))
 
 	def callFps(self):	
 		if self.fps != None:
@@ -165,12 +185,12 @@ class Camara:
 		https://developer.ridgerun.com/wiki/index.php?title=Birds_Eye_View/Introduction/Research
 	'''
 	def get_social_distance_violations(self, objects):
-		# ensure there are *at least* two people detections (required in
-		# order to compute our pairwise distance maps)
+		# Ensure there are *at least* two people detections (required in
+		# order to compute our pairwise distance maps).
 		point_violations = set()
 		if len(objects) >= 2:
-			# extract all centroids from the results and compute the
-			# Euclidean distances between all pairs of the centroids
+			# Extract all centroids from the results and compute the
+			# Euclidean distances between all pairs of the centroids.
 			centroids = objects.values()
 			np_centroids = np.array(list(centroids))
 			D = dist.cdist(np_centroids, np_centroids, metric="euclidean")
@@ -215,18 +235,19 @@ class Camara:
 						confidences.append(float(confidence))
 						classids.append(classid)
 
-
 		return boxes, confidences, classids
 
 	def gen_frames(self, sharedFrame):
 		# Loop over frames from the video stream.
+		lastTime = 0
+
 		while True:
 			# Grab the next frame and handle if we are reading from either
 			# VideoCapture or VideoStream.
-			frame = self.vs.read()
-			frame = frame[1]
+			status, frame = self.vs.read()
+			lastTime = time.time()
 
-			if frame is None:
+			if not status:
 				break
 
 			# Resize the frame to have a maximum width of 500 pixels (the
@@ -239,13 +260,6 @@ class Camara:
 			if self.W is None or self.H is None:
 				(self.H, self.W) = frame.shape[:2]
 
-			# if we are supposed to be writing a video to disk, initialize
-			# the writer
-			if args["output"] is not None and self.writer is None:
-				self.fourcc = cv2.VideoWriter_fourcc(*"MJPG")
-				self.writer = cv2.VideoWriter(args["output"], fourcc, 30,
-					(self.W, self.H), True)
-
 			# initialize the current status along with our list of bounding
 			# box rectangles returned by either (1) our object detector or
 			# (2) the correlation trackers
@@ -254,24 +268,24 @@ class Camara:
 
 			# check to see if we should run a more computationally expensive
 			# object detection method to aid our tracker
-			if self.totalFrames % args["skip_frames"] == 0:
+			if self.totalFrames % SKIP_FRAMES_ == 0:
 				# set the status and initialize our new set of object trackers
 				self.status = "Detecting"
 				self.trackers = []
 
 				# convert the frame to a blob and pass the blob through the
 				# network and obtain the detections
-				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), 127.5, swapRB=True, crop=False)
+				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
 				self.net.setInput(blob)
+				
+				start = time.time()
+				detections = self.net.forward(self.layer_names)
+				end = time.time()
+				print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
 
-				layer_names = self.net.getLayerNames()
-				output_layers = [layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, CONFIDENCE_)
 
-				detections = self.net.forward(output_layers)
-
-				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, args["confidence"])
-
-				idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"], self.NMS_THRESH)
+				idxs = cv2.dnn.NMSBoxes(boxes, confidences, CONFIDENCE_, self.NMS_THRESH)
 
 				# loop over the detections
 				if len(idxs) > 0:
@@ -283,7 +297,7 @@ class Camara:
 
 							# filter out weak detections by requiring a minimum
 							# confidence
-							if confidence > args["confidence"]:
+							if confidence > CONFIDENCE_:
 								# extract the index of the class label from the
 								# detections list
 								idx = int(classids[i])
@@ -346,10 +360,7 @@ class Camara:
 
 			# loop over the tracked objects
 			for (i, (objectID, centroid)) in enumerate(objects.items()):
-				self.data = {
-					"cantidad": len(objects.items()),
-					"lugar": "Camara 0"
-				}
+				
 				# check to see if a trackable object exists for the current
 				# object ID
 				to = self.trackableObjects.get(objectID, None)
@@ -410,49 +421,40 @@ class Camara:
 				cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
-			# construct a tuple of information we will be displaying on the
-			# frame. We want to consider every social distance violation as a
-			# requirement of at least two people violation the rule.
-			info = [
-				("Der a Izq", self.totalUp),
-				("Izq a Der", self.totalDown),
-				("Status", self.status),
-				("Distance Violations", math.ceil(self.totalDistanceViolations/2)),
-				("FPS", int(self.fpsValue))
-			]
-
-			# loop over the info tuples and draw them on our frame
-			for (i, (k, v)) in enumerate(info):
-				text = "{}: {}".format(k, v)
-				cv2.putText(frame, text, (10, self.H - ((i * 20) + 20)),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-
-			# check to see if we should write the frame to disk
-			if self.writer is not None:
-				self.writer.write(frame)
+			self.data = {
+				"in_direction": self.totalUp,
+				"out_direction": self.totalDown,
+				"counter": len(objects.items()),
+				"social_distancing_v": math.ceil(self.totalDistanceViolations/2),
+				"fps": int(self.fpsValue),
+			}
 
 			#Publish frame in Shared Array
 			sharedFrame[:] = frame
 
 			# show the output frame
-			# cv2.imshow("Frame", frame)
-			# key = cv2.waitKey(1) & 0xFF
+			if VERBOSE:
+				cv2.imshow("Frame", frame)
+				key = cv2.waitKey(1) & 0xFF
 
-			# if the `q` key was pressed, break from the loop
-			# if key == ord("q"):
-			# 	break
+				# if the `q` key was pressed, break from the loop
+				if key == ord("q"):
+					break
 
 			# increment the total number of frames processed thus far and
 			# then update the FPS counter
 			self.totalFrames += 1
+			
+			# Handle Max Fps
+			while time.time() - lastTime  < 1 / MAX_FPS:
+				pass
+				
 			self.fps.update()
+
 		
-		if "videos" in self.inputSource:
-			self.end_process()
-		else:
-			self.vs = cv2.VideoCapture(self.inputSource)
-			self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-			self.gen_frames()
+		self.vs = cv2.VideoCapture(self.inputSource)
+		self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+		self.gen_frames(sharedFrame)
 
 	def end_process(self):
 		# check to see if we need to release the video writer pointer
@@ -505,7 +507,7 @@ if __name__ == '__main__':
 			cap.release()
 
 			inputFrames.append(Array(ctypes.c_uint8, inputShapes[-1][0] * inputShapes[-1][1] * inputShapes[-1][2], lock=False))
-			processReference.append(Process(target=Camara, args=(refE, camara["src"], args, inputFrames[-1], inputShapes[-1])))
+			processReference.append(Process(target=Camara, args=(refE, camara["src"], inputFrames[-1], inputShapes[-1])))
 			processReference[-1].start()
 
 			camara["refI"] = refI
