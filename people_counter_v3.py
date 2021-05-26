@@ -17,6 +17,7 @@ from flask import Flask, render_template, Response
 from imutils.video import VideoStream
 from imutils.video import FPS
 from dotenv import load_dotenv
+from scipy.spatial import distance as dist
 import os
 import numpy as np
 import argparse
@@ -27,6 +28,7 @@ import cv2
 import requests
 import threading
 import json
+import math
 
 
 # Construct the argument parse and parse the arguments.
@@ -48,7 +50,7 @@ args = vars(ap.parse_args())
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript_.json') as inputScript:
+with open('inputScript.json') as inputScript:
   inputSources = json.load(inputScript)
 
 camaras = []
@@ -107,10 +109,20 @@ class Camara:
 		self.status = "Waiting"
 		self.fpsValue = 30
 
+		# counter for social distance violations
+		self.totalDistanceViolations = 0
+		self.socialDistanceThreshold = 120 # distance in pixels for SD violation
+
 		self.data = {
 			"cantidad" : 0,
 			"lugar" : self.camaraId
 		}
+
+		# colors for the centroid and bounding box of  
+		# every detected object in camera
+		self.COLOR_RED = (0, 0, 255)
+		self.COLOR_GREEN = (0, 255, 0)
+		self.COLOR_BLACK = (0, 0, 0)
 
 		# Start the frames per second throughput estimator
 		self.fps = None
@@ -137,6 +149,43 @@ class Camara:
 		
 		callFpsThread = threading.Timer(2.0, self.callFps, args=())
 		callFpsThread.start()
+
+		'''
+	Function to get the social distance violations based on the position
+	of the centroids detected in the frame.
+
+	@objects (array): centroids (tuple) for every detected object.
+	@return (set)		: coordinates of the centroids that violate
+										social distancing.
+
+	TODO
+		Implement Bird Eye View (also called Inverse Perspective Mapping) for 
+		better accuracy on social distancing violation detections.
+		https://developer.ridgerun.com/wiki/index.php?title=Birds_Eye_View/Introduction/Research
+	'''
+	def get_social_distance_violations(self, objects):
+		# ensure there are *at least* two people detections (required in
+		# order to compute our pairwise distance maps)
+		point_violations = set()
+		if len(objects) >= 2:
+			# extract all centroids from the results and compute the
+			# Euclidean distances between all pairs of the centroids
+			centroids = objects.values()
+			np_centroids = np.array(list(centroids))
+			D = dist.cdist(np_centroids, np_centroids, metric="euclidean")
+
+			# loop over the upper triangular of the distance matrix
+			for i in range(0, D.shape[0]):
+				for j in range(i + 1, D.shape[1]):
+					# check to see if the distance between any two
+					# centroid pairs is less than the configured number
+					# of pixels
+					if D[i, j] < self.socialDistanceThreshold:
+						# update our violation set with the indexes of
+						# the centroid pairs
+						point_violations.add(i)
+						point_violations.add(j)
+		return point_violations
 
 	def generate_boxes_confidences_classids(self, outs, threshold):
 		boxes = []
@@ -291,8 +340,10 @@ class Camara:
 			objects = object_position_data["centroid"]
 			points = object_position_data["rect"]
 
+			violate = self.get_social_distance_violations(objects)
+
 			# loop over the tracked objects
-			for (objectID, centroid) in objects.items():
+			for (i, (objectID, centroid)) in enumerate(objects.items()):
 				self.data = {
 					"cantidad": len(objects.items()),
 					"lugar": "Camara 0"
@@ -324,6 +375,9 @@ class Camara:
 						if direction < 0 and centroid[0] < self.W // 2:
 							self.totalUp += 1
 							to.counted = True
+							if i in violate:
+								self.totalDistanceViolations += 1
+								violate.remove(i)
 
 						# if the direction is positive (indicating the object
 						# is moving down) AND the centroid is below the
@@ -331,6 +385,9 @@ class Camara:
 						elif direction > 0 and centroid[0] > self.W // 2:
 							self.totalDown += 1
 							to.counted = True
+							if i in violate:
+								self.totalDistanceViolations += 1
+								violate.remove(i)
 
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
@@ -338,11 +395,14 @@ class Camara:
 				x_start, y_start, x_end, y_end = points[objectID]
 
 				text = "ID {}".format(objectID)
-				color = (0, 255, 0)
+				color = self.COLOR_GREEN
+
+				if i in violate:
+					color = self.COLOR_RED
 
 				cv2.rectangle(frame, (x_start, y_start), (x_start + 50, y_start + 20), color, -1)
 				cv2.putText(frame, text, (x_start + 5, y_start + 15),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 2)
+					cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLOR_BLACK, 2)
 				cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
@@ -352,6 +412,7 @@ class Camara:
 				("Der a Izq", self.totalUp),
 				("Izq a Der", self.totalDown),
 				("Status", self.status),
+				("Distance Violations", math.ceil(self.totalDistanceViolations/2)),
 				("FPS", int(self.fpsValue))
 			]
 

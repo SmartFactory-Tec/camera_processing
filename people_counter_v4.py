@@ -65,16 +65,15 @@ class Camara:
 	API_ENDPOINT = os.getenv("API_ENDPOINT")
 	
 	# Initialize list of class labels MobileNet SSD was trained to detect
-	CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
-		"bottle", "bus", "car", "cat", "chair", "cow", "diningtable",
-		"dog", "horse", "motorbike", "person", "pottedplant", "sheep",
-		"sofa", "train", "tvmonitor"]
+	CLASSES = None
+	with open('yolo/coco.names', 'r') as f:
+		CLASSES = [line.strip() for line in f.readlines()]
 	
 	def __init__(self, id, inputSource, args, inputFrame, frameShape):
 		self.camaraId = "Camara" + str(id)
 		
-		# Load Model
-		self.net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
+			# Load Model
+		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
   	
 		self.inputSource = inputSource
 		
@@ -89,6 +88,9 @@ class Camara:
 		# the first frame from the video)
 		self.W = None
 		self.H = None
+
+		# Non maxima supression threshold
+		self.NMS_THRESH = 0.3
 
 		# Instantiate our centroid tracker, then initialize a list to store
 		# each of our dlib correlation trackers, followed by a dictionary to
@@ -186,6 +188,36 @@ class Camara:
 						point_violations.add(j)
 		return point_violations
 
+	def generate_boxes_confidences_classids(self, outs, threshold):
+		boxes = []
+		confidences = []
+		classids = []
+
+		for out in outs:
+				for detection in out:
+					# Get the scores, classid, and the confidence of the prediction
+					scores = detection[5:]
+					classid = np.argmax(scores)
+					confidence = scores[classid]				
+
+					if confidence > threshold:
+
+						# compute the (x, y)-coordinates of the bounding box
+						# for the object
+						box = np.array(detection[0:4]) * np.array([self.W, self.H, self.W, self.H])
+						(centerX, centerY, width, height) = box.astype("int")
+
+						startX = int(centerX - (width / 2))
+						startY = int(centerY - (height / 2))
+
+						# Append to list
+						boxes.append([startX, startY, int(width), int(height)])
+						confidences.append(float(confidence))
+						classids.append(classid)
+
+
+		return boxes, confidences, classids
+
 	def gen_frames(self, sharedFrame):
 		# Loop over frames from the video stream.
 		while True:
@@ -229,42 +261,52 @@ class Camara:
 
 				# convert the frame to a blob and pass the blob through the
 				# network and obtain the detections
-				blob = cv2.dnn.blobFromImage(frame, 0.007843, (self.W, self.H), 127.5)
+				blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), 127.5, swapRB=True, crop=False)
 				self.net.setInput(blob)
-				detections = self.net.forward()
+
+				layer_names = self.net.getLayerNames()
+				output_layers = [layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
+
+				detections = self.net.forward(output_layers)
+
+				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, args["confidence"])
+
+				idxs = cv2.dnn.NMSBoxes(boxes, confidences, args["confidence"], self.NMS_THRESH)
 
 				# loop over the detections
-				for i in np.arange(0, detections.shape[2]):
-					# extract the confidence (i.e., probability) associated
-					# with the prediction
-					confidence = detections[0, 0, i, 2]
+				if len(idxs) > 0:
+						# loop over the indexes we are keeping
+						for i in idxs.flatten():
+							# extract the confidence (i.e., probability) associated
+							# with the prediction
+							confidence = confidences[i]
 
-					# filter out weak detections by requiring a minimum
-					# confidence
-					if confidence > args["confidence"]:
-						# extract the index of the class label from the
-						# detections list
-						idx = int(detections[0, 0, i, 1])
+							# filter out weak detections by requiring a minimum
+							# confidence
+							if confidence > args["confidence"]:
+								# extract the index of the class label from the
+								# detections list
+								idx = int(classids[i])
 
-						# if the class label is not a person, ignore it
-						if Camara.CLASSES[idx] != "person":
-							continue
+								# if the class label is not a person, ignore it
+								if Camara.CLASSES[idx] != "person":
+									continue
 
-						# compute the (x, y)-coordinates of the bounding box
-						# for the object
-						box = detections[0, 0, i, 3:7] * np.array([self.W, self.H, self.W, self.H])
-						(startX, startY, endX, endY) = box.astype("int")
+								startX, startY, width, height = boxes[i]
 
-						# construct a dlib rectangle object from the bounding
-						# box coordinates and then start the dlib correlation
-						# tracker
-						tracker = dlib.correlation_tracker()
-						rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
-						tracker.start_track(rgb, rect)
+								endX = startX + width
+								endY = startY + height
 
-						# add the tracker to our list of trackers so we can
-						# utilize it during skip frames
-						self.trackers.append(tracker)
+								# construct a dlib rectangle object from the bounding
+								# box coordinates and then start the dlib correlation
+								# tracker`
+								tracker = dlib.correlation_tracker()
+								rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
+								tracker.start_track(rgb, rect)
+
+								# add the tracker to our list of trackers so we can
+								# utilize it during skip frames
+								self.trackers.append(tracker)
 
 			# otherwise, we should utilize our object *trackers* rather than
 			# object *detectors* to obtain a higher frame processing throughput
