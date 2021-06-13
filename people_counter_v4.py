@@ -27,8 +27,9 @@ import socketio
 import socket
 
 BACK_AVAILABLE = False
+GPU_AVAILABLE = True
 VERBOSE = False
-CONFIDENCE_ = 0.4
+CONFIDENCE_ = 0.3
 SKIP_FRAMES_ = 25
 MAX_FPS = 60
 
@@ -43,7 +44,7 @@ class Camara:
 	COLOR_RED = (0, 0, 255)
 	COLOR_GREEN = (0, 255, 0)
 	COLOR_BLACK = (0, 0, 0)
-	socialDistanceThreshold = 120
+	socialDistanceThreshold = 90
 	
 	sio = socketio.Client()
 	
@@ -59,6 +60,11 @@ class Camara:
 		
 		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
+		if GPU_AVAILABLE:
+			# set CUDA as the preferable backend and target
+			print("[INFO] setting preferable backend and target to CUDA...")
+			net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+			net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
   	# Get the output layer names of the model
 		self.layer_names = self.net.getLayerNames()
@@ -127,7 +133,7 @@ class Camara:
 	def connectSIO(self):
 		self.sioConnected = True
 		print('Connection Established.')
-		quantityCamaras = 1
+		quantityCamaras = 2
 		self.sio.emit('visionInit', quantityCamaras)
 
 	def disconnectSIO(self):
@@ -135,7 +141,7 @@ class Camara:
 	
 	def visionInitSIO(self, camaraInfo):
 		print('CamaraInfo ', camaraInfo)
-		self.idDb = camaraInfo[0]['id']
+		self.idDb = camaraInfo[self.id]['id']
 		self.sio.emit('updateCamara', data=(
 			self.idDb, 
 			'http://' + socket.getfqdn() + ':8080/camara/' + str(self.id)
@@ -242,6 +248,9 @@ class Camara:
 		lastTime = 0
 
 		while True:
+			# Counter for social distance violations.
+			self.totalDistanceViolations = 0
+
 			# Grab the next frame and handle if we are reading from either
 			# VideoCapture or VideoStream.
 			status, frame = self.vs.read()
@@ -388,9 +397,6 @@ class Camara:
 						if direction < 0 and centroid[0] < self.W // 2:
 							self.totalUp += 1
 							to.counted = True
-							if i in violate:
-								self.totalDistanceViolations += 1
-								violate.remove(i)
 
 						# if the direction is positive (indicating the object
 						# is moving down) AND the centroid is below the
@@ -398,9 +404,6 @@ class Camara:
 						elif direction > 0 and centroid[0] > self.W // 2:
 							self.totalDown += 1
 							to.counted = True
-							if i in violate:
-								self.totalDistanceViolations += 1
-								violate.remove(i)
 
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
@@ -413,11 +416,12 @@ class Camara:
 				color = self.COLOR_GREEN
 
 				if i in violate:
+					self.totalDistanceViolations += 1
 					color = self.COLOR_RED
 
-				cv2.rectangle(frame, (x_start, y_start), (x_start + 50, y_start + 20), color, -1)
-				cv2.putText(frame, text, (x_start + 5, y_start + 15),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.COLOR_BLACK, 2)
+				cv2.rectangle(frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
+				cv2.putText(frame, text, (x_start + 5, y_start + 10),
+					cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 2)
 				cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 

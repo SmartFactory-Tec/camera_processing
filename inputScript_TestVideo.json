@@ -5,7 +5,11 @@
     "camaras" : [
       {
         "name": "Test - Entrada Norte",
-        "src": "videos/peoplewalking.mp4"
+        "src": "videos/testE.mp4"
+      },
+      {
+        "name": "Test - Entrada Norte",
+        "src": "videos/testC.mp4"
       }
     ]
   }

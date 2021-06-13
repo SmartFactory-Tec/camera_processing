@@ -14,9 +14,10 @@ pyimagesearch/__pycache__/
 people-counter/
 !output/.gitkeep 
 
+# files
 /app.py
-
-videos/social-distance-test.mp4
+*.mp4
 
 #yolo model
-yolo/yolov3.weights
+*.weights
+*.cfg
