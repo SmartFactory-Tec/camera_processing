@@ -30,6 +30,7 @@ import threading
 import json
 import math
 
+GPU_AVAILABLE = True
 
 # Construct the argument parse and parse the arguments.
 ap = argparse.ArgumentParser()
@@ -76,7 +77,12 @@ class Camara:
 		
 		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
-  	
+  	if GPU_AVAILABLE:
+			# set CUDA as the preferable backend and target
+			print("[INFO] setting preferable backend and target to CUDA...")
+			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+			self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+
 		self.inputSource = inputSource
 		
 		print("[INFO] opening video file...")

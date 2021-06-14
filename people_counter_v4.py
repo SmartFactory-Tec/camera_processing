@@ -63,8 +63,8 @@ class Camara:
 		if GPU_AVAILABLE:
 			# set CUDA as the preferable backend and target
 			print("[INFO] setting preferable backend and target to CUDA...")
-			net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-			net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+			self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
   	# Get the output layer names of the model
 		self.layer_names = self.net.getLayerNames()
