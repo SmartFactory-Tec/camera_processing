@@ -25,6 +25,8 @@ import cv2
 import requests
 import threading
 
+GPU_AVAILABLE = True
+
 app = Flask(__name__)
 last_frames = deque( maxlen=120 )
 
@@ -44,13 +46,13 @@ def callPost():
 		r = requests.post(API_ENDPOINT, json=data) 
   
 #Post Call
-callPost()
+#callPost()
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-p", "--prototxt", required=True,
+ap.add_argument("-p", "--prototxt", default="mobilenet_ssd/MobileNetSSD_deploy.prototxt",
 	help="path to Caffe 'deploy' prototxt file")
-ap.add_argument("-m", "--model", required=True,
+ap.add_argument("-m", "--model", default="mobilenet_ssd/MobileNetSSD_deploy.caffemodel",
 	help="path to Caffe pre-trained model")
 ap.add_argument("-i", "--input", type=str,
 	help="path to optional input video file")
@@ -72,6 +74,9 @@ CLASSES = ["background", "aeroplane", "bicycle", "bird", "boat",
 # load our serialized model from disk
 print("[INFO] loading model...")
 net = cv2.dnn.readNetFromCaffe(args["prototxt"], args["model"])
+if GPU_AVAILABLE:
+	net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+	net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
 # if a video path was not supplied, grab a reference to the webcam
 if not args.get("input", False):
