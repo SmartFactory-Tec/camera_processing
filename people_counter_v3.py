@@ -51,7 +51,7 @@ args = vars(ap.parse_args())
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript.json') as inputScript:
+with open('inputScript_TestV3.json') as inputScript:
   inputSources = json.load(inputScript)
 
 camaras = []
@@ -77,7 +77,7 @@ class Camara:
 		
 		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
-  	if GPU_AVAILABLE:
+		if GPU_AVAILABLE:
 			# set CUDA as the preferable backend and target
 			print("[INFO] setting preferable backend and target to CUDA...")
 			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
