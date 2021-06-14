@@ -118,8 +118,8 @@ totalFrames = 0
 totalDown = 0
 totalUp = 0
 
-# start the frames per second throughput estimator
-fps = FPS().start()
+# Define the frames per second throughput estimator
+fps = None
 
 def gen_frames():
 	global args
@@ -138,8 +138,10 @@ def gen_frames():
 	global W
 	global H
 	global last_frames
+	fps = FPS().start()
 	# loop over frames from the video stream
 	while True:
+		startAll = time.time()
 		# grab the next frame and handle if we are reading from either
 		# VideoCapture or VideoStream
 		frame = vs.read()
@@ -337,8 +339,14 @@ def gen_frames():
 		# then update the FPS counter
 		totalFrames += 1
 		fps.update()
+		endAll = time.time()
+		print ("[INFO] Iteration took {:6f} seconds".format(endAll - startAll))
 
 	if args["output"] is None and writer is None:
+		fps.stop()
+		print("[INFO] elapsed time: {:.2f}".format(fps.elapsed()))
+		print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
+		print("\n\n\n\n")
 		vs = cv2.VideoCapture(args["input"])
 		vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
 		gen_frames()
