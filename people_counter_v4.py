@@ -39,8 +39,8 @@ with open('inputScript_TestVideo.json') as inputScript:
   inputSources = json.load(inputScript)
 
 class CamaraRead:
-	MAX_FPS = 32
-	MAX_SKIP = 15
+	MAX_FPS = 30
+	MAX_SKIP = 3
 
 	def __init__(self, sources, inputFrames, frameShapes, flags):
 		self.sources = sources
