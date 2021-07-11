@@ -2,15 +2,15 @@
 # python3 people_counter_v4.py
 
 # Import Dependencies
-from multiprocessing import Process, Array
+from multiprocessing import Process, Array, Value
 from pyimagesearch.centroidtracker import CentroidTracker
 from pyimagesearch.trackableobject import TrackableObject
-from collections import deque
 from flask import Flask, render_template, Response
 from imutils.video import VideoStream
 from imutils.video import FPS
 from dotenv import load_dotenv
 from scipy.spatial import distance as dist
+from queue import Queue
 import os
 import numpy as np
 import argparse
@@ -31,7 +31,6 @@ GPU_AVAILABLE = True
 VERBOSE = False
 CONFIDENCE_ = 0.3
 SKIP_FRAMES_ = 25
-MAX_FPS = 60
 
 load_dotenv()
 app = Flask(__name__)
@@ -39,7 +38,64 @@ app = Flask(__name__)
 with open('inputScript_TestVideo.json') as inputScript:
   inputSources = json.load(inputScript)
 
-class Camara:
+class CamaraRead:
+	MAX_FPS = 32
+	MAX_SKIP = 15
+
+	def __init__(self, sources, inputFrames, frameShapes, flags):
+		self.sources = sources
+		self.inputFrames = inputFrames
+		self.frameShapes = frameShapes
+		self.flags = flags
+		for index in range(len(sources)):
+			readThread = threading.Thread(target=self.mainLoop, args=(index,))
+			readThread.start()
+		
+		readThread.join()
+	
+	def mainLoop(self, index):
+		source = self.sources[index]
+		inputFrame = self.inputFrames[index]
+		frameShape = self.frameShapes[index]
+		flag = self.flags[index]
+
+		print("[INFO] opening video file...", source)
+		vs = cv2.VideoCapture(source)
+		vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+		inputFrame_ = np.frombuffer(inputFrame, dtype=np.uint8)
+		inputFrame_ = inputFrame_.reshape(frameShape)
+		
+		q = Queue(maxsize = 0)
+		notTakenCounter = 0
+
+		while True:
+			lastTime = time.time()
+			status, frame = vs.read()
+
+			if not status:
+				vs = cv2.VideoCapture(source)
+				vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+				continue
+
+			frame = imutils.resize(frame, width=500)
+
+			if notTakenCounter == 0:
+				q.put(frame)
+
+			if not flag.value:
+				if (q.empty()):
+					inputFrame_[:] = frame
+					notTakenCounter = 0
+				else:
+					inputFrame_[:] = q.get()
+				flag.value = True
+
+			notTakenCounter = (notTakenCounter + 1) % CamaraRead.MAX_SKIP
+
+			while time.time() - lastTime  < 1 / CamaraRead.MAX_FPS:
+				pass
+
+class CamaraProcessing:
 	API_ENDPOINT = os.getenv("API_ENDPOINT")
 	COLOR_RED = (0, 0, 255)
 	COLOR_GREEN = (0, 255, 0)
@@ -53,7 +109,7 @@ class Camara:
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, inputSource, inputFrame, frameShape):
+	def __init__(self, id, inputFrame, outputFrame, frameShape, flag):
 		self.id = id
 		self.idDb = 0
 		self.camaraId = "Camara" + str(id)
@@ -69,12 +125,6 @@ class Camara:
   	# Get the output layer names of the model
 		self.layer_names = self.net.getLayerNames()
 		self.layer_names = [self.layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
-
-		self.inputSource = inputSource
-		
-		print("[INFO] opening video file...")
-		self.vs = cv2.VideoCapture(self.inputSource)
-		self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
 
 		# initialize the video writer (we'll instantiate later if need be)
 		self.writer = None
@@ -126,9 +176,14 @@ class Camara:
 			self.sio.on('visionInit', self.visionInitSIO)
 			self.sio.connect('http://covid-response-back.herokuapp.com/')
 
-		sharedFrame = np.frombuffer(inputFrame, dtype=np.uint8)
-		sharedFrame = sharedFrame.reshape(frameShape)    
-		self.gen_frames(sharedFrame)
+		inputFrame_ = np.frombuffer(inputFrame, dtype=np.uint8)
+		inputFrame_ = inputFrame_.reshape(frameShape)
+		outputFrame_ = np.frombuffer(outputFrame, dtype=np.uint8)
+		outputFrame_ = outputFrame_.reshape(frameShape)
+		try:
+			self.gen_frames(inputFrame_, outputFrame_, flag)
+		except KeyboardInterrupt:
+			self.end_process()
 	
 	def connectSIO(self):
 		self.sioConnected = True
@@ -243,26 +298,20 @@ class Camara:
 
 		return boxes, confidences, classids
 
-	def gen_frames(self, sharedFrame):
+	def gen_frames(self, inputFrame_, outputFrame_, flag):
 		# Loop over frames from the video stream.
-		lastTime = 0
 
 		while True:
 			# Counter for social distance violations.
 			self.totalDistanceViolations = 0
 
-			# Grab the next frame and handle if we are reading from either
-			# VideoCapture or VideoStream.
-			status, frame = self.vs.read()
-			lastTime = time.time()
+			# Grab the next frame if available.
+			while(not flag.value):
+				pass
+			flag.value = False
+			frame[:] = inputFrame_
 
-			if not status:
-				break
-
-			# Resize the frame to have a maximum width of 500 pixels (the
-			# less data we have, the faster we can process it), then convert
-			# the frame from BGR to RGB for dlib.
-			frame = imutils.resize(frame, width=500)
+			# Convert the frame from BGR to RGB for dlib.
 			rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
 			# if the frame dimensions are empty, set them
@@ -277,7 +326,7 @@ class Camara:
 
 			# check to see if we should run a more computationally expensive
 			# object detection method to aid our tracker
-			if self.totalFrames % SKIP_FRAMES_ == 0:
+			if self.totalFrames == 0:
 				# set the status and initialize our new set of object trackers
 				self.status = "Detecting"
 				self.trackers = []
@@ -312,7 +361,7 @@ class Camara:
 								idx = int(classids[i])
 
 								# if the class label is not a person, ignore it
-								if Camara.CLASSES[idx] != "person":
+								if CamaraProcessing.CLASSES[idx] != "person":
 									continue
 
 								startX, startY, width, height = boxes[i]
@@ -433,10 +482,10 @@ class Camara:
 				"fps": int(self.fpsValue),
 			}
 
-			#Publish frame in Shared Array
-			sharedFrame[:] = frame
+			# Publish frame.
+			outputFrame_[:] = frame
 
-			# show the output frame
+			# Show the output frame.
 			if VERBOSE:
 				cv2.imshow("Frame", frame)
 				key = cv2.waitKey(1) & 0xFF
@@ -445,35 +494,27 @@ class Camara:
 				if key == ord("q"):
 					break
 
-			# increment the total number of frames processed thus far and
-			# then update the FPS counter
-			self.totalFrames += 1
-			
-			# Handle Max Fps
-			while time.time() - lastTime  < 1 / MAX_FPS:
-				pass
+			# Increment frames counter.
+			self.totalFrames = (self.totalFrames + 1) % SKIP_FRAMES_
 				
+			# Update FPS counter.
 			self.fps.update()
-
-		
-		self.vs = cv2.VideoCapture(self.inputSource)
-		self.vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-		self.gen_frames(sharedFrame)
 
 	def end_process(self):
 		# check to see if we need to release the video writer pointer
 		if self.writer is not None:
 			self.writer.release()
 
-		self.vs.release()
-
 		# close any open windows
 		cv2.destroyAllWindows()
 
 
 processReference = []
-inputShapes = []
+sources = []
+frameShapes = []
 inputFrames = []
+outputFrames = []
+flags = []
 
 @app.route('/camara/<id>')
 def camaraStream(id):
@@ -481,10 +522,10 @@ def camaraStream(id):
 	return Response(showFrame(int(id)), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def showFrame(id):
-	inputFrame = np.frombuffer(inputFrames[id], dtype=np.uint8)
-	inputFrame = inputFrame.reshape(inputShapes[id])
+	outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
+	outputFrame = outputFrame.reshape(frameShapes[id])
 	while True:
-		ret, buffer = cv2.imencode('.jpg', inputFrame)
+		ret, buffer = cv2.imencode('.jpg', outputFrame)
 		frame_ready = buffer.tobytes()
 		yield (b'--frame\r\n'
 						b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
@@ -507,17 +548,24 @@ if __name__ == '__main__':
 			cap = cv2.VideoCapture(camara["src"])
 			ret, frame = cap.read()
 			frame = imutils.resize(frame, width=500)
-			inputShapes.append(frame.shape)
+			frameShapes.append(frame.shape)
 			cap.release()
 
-			inputFrames.append(Array(ctypes.c_uint8, inputShapes[-1][0] * inputShapes[-1][1] * inputShapes[-1][2], lock=False))
-			processReference.append(Process(target=Camara, args=(refE, camara["src"], inputFrames[-1], inputShapes[-1])))
+			inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+			outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+			flags.append(Value(ctypes.c_bool, False))
+			processReference.append(Process(target=CamaraProcessing, args=(refE, inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1])))
 			processReference[-1].start()
+			
+			sources.append(camara["src"])
 
 			camara["refI"] = refI
 			camara["refE"] = refE
 			refI += 1
 			refE += 1
+
+	readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags))
+	readProcessRef.start()
 
 	from waitress import serve
 
