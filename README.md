@@ -40,6 +40,14 @@ pip install -r requirements.txt
 
 ## Usage script
 Open main.py, modify global variables if needed.
+
+Requirements:
+- Valid CamaraIDS.
+- Backend running.
+- Yolov3.
+- Python Dependencies.
+- Videos Folder.
+
 ```python
 CAMARAIDS = [6, 7]
 BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
