@@ -3,6 +3,7 @@
 
 # Import Dependencies
 from multiprocessing import Process, Array, Value
+from multiprocessing.managers import BaseManager
 from pyimagesearch.centroidtracker import CentroidTracker
 from pyimagesearch.trackableobject import TrackableObject
 from flask import Flask, render_template, Response
@@ -26,7 +27,9 @@ import math
 import socketio
 import socket
 
-BACK_AVAILABLE = False
+CAMARAIDS = [6, 7]
+BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
+NGROK_AVAILABLE = True
 GPU_AVAILABLE = True
 VERBOSE = False
 CONFIDENCE_ = 0.3
@@ -35,8 +38,70 @@ SKIP_FRAMES_ = 25
 load_dotenv()
 app = Flask(__name__)
 
-with open('inputScript_TestVideo.json') as inputScript:
-  inputSources = json.load(inputScript)
+class SocketIOProcess:
+	sio = socketio.Client()
+
+	def __init__(self):
+		self.camaraIDs = CAMARAIDS
+		self.quantityCamaras = len(self.camaraIDs)
+		self.camarasInfo = []
+		self.sioConnected = False
+		self.hasCamarasInfo = False
+		self.sio.on('connect', self.connectSIO)
+		self.sio.on('disconnect', self.disconnectSIO)
+		self.sio.on('visionInit', self.visionInitSIO)
+		self.sio.connect(BACK_ENDPOINT)
+	
+	def connectSIO(self):
+		print('Connected')
+		self.sioConnected = True
+		self.sio.emit('visionInit', self.camaraIDs)
+
+	def disconnectSIO(self):
+		print('Disconnected')
+		self.sioConnected = False
+		self.hasCamarasInfo = False
+		self.camarasInfo = []
+	
+	def waitSIO(self):
+		self.sio.wait()
+
+	def visionInitSIO(self, camarasInfo):
+		self.camarasInfo = camarasInfo
+		self.hasCamarasInfo = True
+		print('CamaraInfo ', camarasInfo)
+
+	def getCamaraInfo(self, id = None):
+		if not self.hasCamarasInfo:
+			return False
+		
+		if not id:
+			return self.camarasInfo
+		
+		return self.camarasInfo[id]
+	
+	def sendCamaraData(self, id, data):
+		if self.sioConnected:
+			self.sio.emit('visionPost', data=(
+				self.camarasInfo[id]['id'],
+				data["in_direction"],
+				data["out_direction"],
+				data["counter"],
+				data["social_distancing_v"],
+				data["fps"],
+			))
+	
+	def setCamaraURL(self, id):
+		if self.sioConnected:
+			if NGROK_AVAILABLE:
+				endpoint = 'http://sems.ngrok.io/camara/'
+			else:	
+				endpoint = 'http://' + socket.getfqdn() + ':8080/camara/'
+			
+			self.sio.emit('updateCamara', data=(
+				self.camarasInfo[id]['id'], 
+				endpoint + str(id)
+			))
 
 class CamaraRead:
 	MAX_FPS = 30
@@ -48,7 +113,7 @@ class CamaraRead:
 		self.frameShapes = frameShapes
 		self.flags = flags
 		for index in range(len(sources)):
-			readThread = threading.Thread(target=self.mainLoop, args=(index,))
+			readThread = threading.Thread(target=self.mainLoop, args=(index,), daemon=True)
 			readThread.start()
 		
 		readThread.join()
@@ -102,18 +167,19 @@ class CamaraProcessing:
 	COLOR_BLACK = (0, 0, 0)
 	socialDistanceThreshold = 90
 	
-	sio = socketio.Client()
-	
 	# Initialize list of class labels MobileNet SSD was trained to detect
 	CLASSES = None
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, inputFrame, outputFrame, frameShape, flag):
+	def __init__(self, id, v_orientation, distance_violation, inputFrame, outputFrame, frameShape, flag, socketManager):
 		self.id = id
-		self.idDb = 0
-		self.camaraId = "Camara" + str(id)
-		
+		self.v_orientation = v_orientation
+		self.distance_violation = distance_violation
+		self.camaraId = "Camara" + str(self.id)
+		self.socketManager = socketManager
+		self.socketManager.setCamaraURL(self.id)
+
 		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
 		if GPU_AVAILABLE:
@@ -122,7 +188,7 @@ class CamaraProcessing:
 			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
 			self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-  	# Get the output layer names of the model
+  		# Get the output layer names of the model
 		self.layer_names = self.net.getLayerNames()
 		self.layer_names = [self.layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
 
@@ -147,8 +213,8 @@ class CamaraProcessing:
 		# initialize the total number of frames processed thus far, along
 		# with the total number of objects that have moved either up or down
 		self.totalFrames = 0
-		self.totalDown = 0
-		self.totalUp = 0
+		self.totalInDir = 0
+		self.totalOutDir = 0
 		self.status = "Waiting"
 		self.fpsValue = 30
 
@@ -165,16 +231,12 @@ class CamaraProcessing:
 
 		# Start the frames per second throughput estimator
 		self.fps = None
-		callFpsThread = threading.Thread(target=self.callFps, args=())
+		callFpsThread = threading.Thread(target=self.callFps, args=(), daemon=True)
 		callFpsThread.start()
 
-
-		if BACK_AVAILABLE:
-			self.sioConnected = False
-			self.sio.on('connect', self.connectSIO)
-			self.sio.on('disconnect', self.disconnectSIO)
-			self.sio.on('visionInit', self.visionInitSIO)
-			self.sio.connect('http://covid-response-back.herokuapp.com/')
+		# Start data post Thread
+		callPostThread = threading.Thread(target=self.callPost, args=(), daemon=True)
+		callPostThread.start()
 
 		inputFrame_ = np.frombuffer(inputFrame, dtype=np.uint8)
 		inputFrame_ = inputFrame_.reshape(frameShape)
@@ -184,41 +246,14 @@ class CamaraProcessing:
 			self.gen_frames(inputFrame_, outputFrame_, flag)
 		except KeyboardInterrupt:
 			self.end_process()
-	
-	def connectSIO(self):
-		self.sioConnected = True
-		print('Connection Established.')
-		quantityCamaras = 2
-		self.sio.emit('visionInit', quantityCamaras)
-
-	def disconnectSIO(self):
-		self.sioConnected = False
-	
-	def visionInitSIO(self, camaraInfo):
-		print('CamaraInfo ', camaraInfo)
-		self.idDb = camaraInfo[self.id]['id']
-		self.sio.emit('updateCamara', data=(
-			self.idDb, 
-			'http://' + socket.getfqdn() + ':8080/camara/' + str(self.id)
-		))
-
-		callPostThread = threading.Thread(target=self.callPost, args=())
-		callPostThread.start()
 
 	def callPost(self):
 		callPostThread = threading.Timer(3.0, self.callPost, args=())
 		callPostThread.start()
 		
 		# Sending Camara Data
-		if self.data["counter"] != 0 and self.sioConnected:
-			self.sio.emit('visionPost', data=(
-				self.idDb,
-				self.data["in_direction"],
-				self.data["out_direction"],
-				self.data["counter"],
-				self.data["social_distancing_v"],
-				self.data["fps"],
-			))
+		if self.data["counter"] != 0:
+			self.socketManager.sendCamaraData(self.id, self.data)
 
 	def callFps(self):	
 		if self.fps != None:
@@ -405,7 +440,10 @@ class CamaraProcessing:
 			# draw a horizontal line in the center of the frame -- once an
 			# object crosses this line we will determine whether they were
 			# moving 'up' or 'down'
-			cv2.line(frame, (self.W//2, 0), (self.W // 2, self.H), (0, 255, 255), 2)
+			if self.v_orientation:
+				cv2.line(frame, (self.W//2, 0), (self.W // 2, self.H), (0, 255, 255), 2)
+			else:
+				cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (0, 255, 255), 2)
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
@@ -414,7 +452,10 @@ class CamaraProcessing:
 			points = object_position_data["rect"]
 
 			# get social distancing violations and points of violation
-			violate = self.get_social_distance_violations(objects)
+			if self.distance_violation:
+				violate = self.get_social_distance_violations(objects)
+			else:
+				violate = []
 
 			# loop over the tracked objects
 			for (i, (objectID, centroid)) in enumerate(objects.items()):
@@ -430,29 +471,54 @@ class CamaraProcessing:
 				# otherwise, there is a trackable object so we can utilize it
 				# to determine direction
 				else:
-					# the difference between the x-coordinate of the current
-					# centroid and the mean of previous centroids will tell
-					# us in which direction the object is moving (negative for
-					# 'left' and positive for 'right')
-					x = [c[0] for c in to.centroids]
-					direction = centroid[0] - np.mean(x)
-					to.centroids.append(centroid)
+					if self.v_orientation:
+						# the difference between the x-coordinate of the current
+						# centroid and the mean of previous centroids will tell
+						# us in which direction the object is moving (negative for
+						# 'left' and positive for 'right')
+						x = [c[0] for c in to.centroids]
+						direction = centroid[0] - np.mean(x)
+						to.centroids.append(centroid)
 
-					# check to see if the object has been counted or not
-					if not to.counted:
-						# if the direction is negative (indicating the object
-						# is moving up) AND the centroid is above the center
-						# line, count the object
-						if direction < 0 and centroid[0] < self.W // 2:
-							self.totalUp += 1
-							to.counted = True
+						# check to see if the object has been counted or not
+						if not to.counted:
+							# if the direction is negative (indicating the object
+							# is moving left) AND the centroid is above the center
+							# line, count the object
+							if direction < 0 and centroid[0] < self.W // 2:
+								self.totalInDir += 1
+								to.counted = True
 
-						# if the direction is positive (indicating the object
-						# is moving down) AND the centroid is below the
-						# center line, count the object
-						elif direction > 0 and centroid[0] > self.W // 2:
-							self.totalDown += 1
-							to.counted = True
+							# if the direction is positive (indicating the object
+							# is moving right) AND the centroid is below the
+							# center line, count the object
+							elif direction > 0 and centroid[0] > self.W // 2:
+								self.totalOutDir += 1
+								to.counted = True
+					else:
+						# the difference between the y-coordinate of the current
+						# centroid and the mean of previous centroids will tell
+						# us in which direction the object is moving (negative for
+						# 'up' and positive for 'down')
+						y = [c[1] for c in to.centroids]
+						direction = centroid[1] - np.mean(y)
+						to.centroids.append(centroid)
+
+						# check to see if the object has been counted or not
+						if not to.counted:
+							# if the direction is negative (indicating the object
+							# is moving up) AND the centroid is above the center
+							# line, count the object
+							if direction < 0 and centroid[0] < self.H // 2:
+								self.totalInDir += 1
+								to.counted = True
+
+							# if the direction is positive (indicating the object
+							# is moving down) AND the centroid is below the
+							# center line, count the object
+							elif direction > 0 and centroid[0] > self.H // 2:
+								self.totalOutDir += 1
+								to.counted = True
 
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
@@ -475,8 +541,8 @@ class CamaraProcessing:
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
 			self.data = {
-				"in_direction": self.totalUp,
-				"out_direction": self.totalDown,
+				"in_direction": self.totalInDir,
+				"out_direction": self.totalOutDir,
 				"counter": len(objects.items()),
 				"social_distancing_v": math.ceil(self.totalDistanceViolations/2),
 				"fps": int(self.fpsValue),
@@ -535,34 +601,39 @@ def showFrame(id):
 @app.route('/')
 def index():
 	"""Video streaming home page."""
-	return render_template('index.html', inputSources = inputSources)
+	return render_template('indexv4.html', len = len(CAMARAIDS), camaraIDs = CAMARAIDS)
 
+BaseManager.register("socketManager", SocketIOProcess)
+def getManager():
+    m = BaseManager()
+    m.start()
+    return m
 
 if __name__ == '__main__':
-  
-	refI = 0
-	refE = 0
-	for location in inputSources:
-		refI = 0
-		for camara in inputSources[location]["camaras"]:
-			cap = cv2.VideoCapture(camara["src"])
-			ret, frame = cap.read()
-			frame = imutils.resize(frame, width=500)
-			frameShapes.append(frame.shape)
-			cap.release()
+	# Initialize Socket Manager.
+	manager = getManager()
+	socketManager = manager.socketManager()
 
-			inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
-			outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
-			flags.append(Value(ctypes.c_bool, False))
-			processReference.append(Process(target=CamaraProcessing, args=(refE, inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1])))
-			processReference[-1].start()
-			
-			sources.append(camara["src"])
+	# Wait till Camaras Info Received.
+	while not socketManager.getCamaraInfo():
+		pass
 
-			camara["refI"] = refI
-			camara["refE"] = refE
-			refI += 1
-			refE += 1
+	camarasInfo = socketManager.getCamaraInfo()
+
+	for index, camara in enumerate(camarasInfo):
+		cap = cv2.VideoCapture(camara["source"])
+		ret, frame = cap.read()
+		frame = imutils.resize(frame, width=500)
+		frameShapes.append(frame.shape)
+		cap.release()
+
+		inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+		outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+		flags.append(Value(ctypes.c_bool, False))
+		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["distance_violation"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
+		processReference[-1].start()
+		
+		sources.append(camara["source"])
 
 	readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags))
 	readProcessRef.start()
@@ -573,3 +644,4 @@ if __name__ == '__main__':
 	app.use_reloader=False
 	serve(app, host="0.0.0.0", port=8080)
 	print("Server 0.0.0.0:8080")	
+	socketManager.waitSIO()
