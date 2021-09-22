@@ -4,15 +4,16 @@ pyimagesearch/__pycache__/
 
 # exclude everything
 /output/*
+/deprecated/output/*
 
 # exception to the rule
 !output/.gitkeep
+!deprecated/output/.gitkeep
 !output/output_AWS_01.avi 
 
 # env
 .env
-people-counter/
-!output/.gitkeep 
+people-counter/ 
 
 # files
 /app.py
