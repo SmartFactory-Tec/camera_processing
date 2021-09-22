@@ -41,13 +41,6 @@ pip install -r requirements.txt
 ## Usage script
 Open main.py, modify global variables if needed.
 
-Requirements:
-- Valid CamaraIDS.
-- Backend running.
-- Yolov3.
-- Python Dependencies.
-- Videos Folder.
-
 ```python
 CAMARAIDS = [6, 7]
 BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
@@ -57,9 +50,17 @@ VERBOSE = False
 CONFIDENCE_ = 0.3
 SKIP_FRAMES_ = 25
 ```
+
+Requirements:
+- Valid CamaraIDS.
+- Backend running.
+- Yolov3.
+- Python Dependencies.
+- Videos Folder.
+
 Run main.py
 
-Then, open localhost:8080, all camaras should be displayed overthere.
+Open localhost:8080, all camaras should be displayed overthere.
 
 # DEPRECATED
 ## Usage original script
