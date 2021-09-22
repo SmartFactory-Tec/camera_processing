@@ -1,8 +1,14 @@
-# Vision algorithm - People Counter
+# Vision algorithm - SEMS
 
-This branch aim to run a script to process video/stream and count the people in every frame. V2.0 and V3.0 output could be seen on a web page. Script version 3.0 was adapted to process n video/streams at the same time.
+This repository aim to run a script (main.py) to process n videos/streams.
+- Algorithms implemented:
+  - People Counter
+  - People Tracker
+  - 2D Distance Violation
+- Uses Flask to publish the image post-processed into a web-page to localhost:8080. 
+- Communicates directly with SEMS backend to request the source of the videos/streams and to publish all vision data calculated.
 
-The code is tested using Ubuntu.
+The code is tested using Ubuntu 18.
 
 ## System Requirements
 - python3
