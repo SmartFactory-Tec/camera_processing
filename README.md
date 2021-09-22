@@ -38,6 +38,44 @@ deactivate
 pip install -r requirements.txt
 ```
 
+## Usage script
+Open main.py, modify global variables if needed.
+
+Requirements:
+- Valid CamaraIDS.
+- Backend running.
+- Yolov3.
+- Python Dependencies.
+- Videos Folder.
+
+```python
+CAMARAIDS = [6, 7]
+BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
+NGROK_AVAILABLE = True
+GPU_AVAILABLE = True
+VERBOSE = False
+CONFIDENCE_ = 0.3
+SKIP_FRAMES_ = 25
+```
+Run main.py
+
+Then, open localhost:8080, all camaras should be displayed overthere.
+
+# DEPRECATED
+## Usage original script
+Run people_counter.py script, giving the protxt, caffemodel, input video and output destination as arguments.
+```bash
+python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4 --output output/output_01.avi
+```
+Then, you should see a window displaying the labeled video and an output in console similar to this
+
+```bash
+[INFO] loading model...
+[INFO] opening video file...
+[INFO] elapsed time: 20.95
+[INFO] approx. FPS: 61.25
+```
+
 ## Usage script v1.0
 
 Run people_counter_v1.py script, giving the protxt, caffemodel, input video and output destination as arguments.

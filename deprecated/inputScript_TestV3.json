@@ -1,0 +1,12 @@
+{
+  "Test" : {
+    "name" : "Monterrey Test",
+    "description" : "Campus Monterrey",
+    "camaras" : [
+      {
+        "name": "Test - Entrada Norte",
+        "src": "videos/testE.mp4"
+      }
+    ]
+  }
+}
