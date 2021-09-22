@@ -18,6 +18,8 @@ people-counter/
 # files
 /app.py
 *.mp4
+!testE.mp4
+!testC.mp4
 
 #yolo model
 *.weights
