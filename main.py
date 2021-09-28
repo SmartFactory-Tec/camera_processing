@@ -104,8 +104,8 @@ class SocketIOProcess:
 			))
 
 class CamaraRead:
-	MAX_FPS = 30
-	MAX_SKIP = 3
+	MAX_FPS = 33
+	MAX_SKIP = 2
 
 	def __init__(self, sources, inputFrames, frameShapes, flags):
 		self.sources = sources
@@ -172,7 +172,7 @@ class CamaraProcessing:
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, inputFrame, outputFrame, frameShape, flag, socketManager):
+	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, inputFrame, outputFrame, frameShape, flag, socketManager):
 		self.id = id
 		self.v_orientation = v_orientation
 		self.run_distance_violation = run_distance_violation
@@ -214,17 +214,17 @@ class CamaraProcessing:
 		# initialize the total number of frames processed thus far, along
 		# with the total number of objects that have moved either up or down
 		self.totalFrames = 0
-		self.totalInDir = 0
-		self.totalOutDir = 0
+		self.totalInDir = last_record["in_direction"]
+		self.totalOutDir = last_record["out_direction"]
 		self.status = "Waiting"
-		self.fpsValue = 30
+		self.fpsValue = 0
 
 		# Counter for social distance violations.
 		self.totalDistanceViolations = 0
 
 		self.data = {
-			"in_direction": 0,
-			"out_direction": 0,
+			"in_direction": self.totalInDir,
+			"out_direction": self.totalOutDir,
 			"counter": 0,
 			"social_distancing_v": 0,
 			"fps": 0,
@@ -454,7 +454,7 @@ class CamaraProcessing:
 				if self.detect_just_left_side:
 					cv2.line(frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
 				else:
-                                        cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
+                    cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
@@ -496,14 +496,14 @@ class CamaraProcessing:
 							# if the direction is negative (indicating the object
 							# is moving left) AND the centroid is above the center
 							# line, count the object
-							if direction < 0 and centroid[0] < self.W // 2:
+							if direction < 5 and centroid[0] < self.W // 2:
 								self.totalInDir += 1
 								to.counted = True
 
 							# if the direction is positive (indicating the object
 							# is moving right) AND the centroid is below the
 							# center line, count the object
-							elif direction > 0 and centroid[0] > self.W // 2:
+							elif direction > 5 and centroid[0] > self.W // 2:
 								self.totalOutDir += 1
 								to.counted = True
 					else:
@@ -640,7 +640,7 @@ if __name__ == '__main__':
 		inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		flags.append(Value(ctypes.c_bool, False))
-		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
+		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
 		processReference[-1].start()
 		
 		sources.append(camara["source"])
