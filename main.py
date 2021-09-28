@@ -27,7 +27,7 @@ import math
 import socketio
 import socket
 
-CAMARAIDS = [8]
+CAMARAIDS = [6]
 BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
 NGROK_AVAILABLE = True
 GPU_AVAILABLE = True
@@ -337,10 +337,10 @@ class CamaraProcessing:
 	def is_in_valid_area(self, box):
 		startX, startY, width, height = box
 		if self.detect_just_left_side:
-			centroid = ((startX + width)//2, (startY + height)//2)
+			centroid = ((startX + width // 2), (startY + height // 2))
 			return centroid[0] < self.W // 2
 		return True
-	
+
 	def gen_frames(self, inputFrame_, outputFrame_, flag):
 		# Loop over frames from the video stream.
 
@@ -449,9 +449,12 @@ class CamaraProcessing:
 			# object crosses this line we will determine whether they were
 			# moving 'up' or 'down'
 			if self.v_orientation:
-				cv2.line(frame, (self.W//2, 0), (self.W // 2, self.H), (0, 255, 255), 2)
+				cv2.line(frame, (self.W//2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
 			else:
-				cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (0, 255, 255), 2)
+				if self.detect_just_left_side:
+					cv2.line(frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
+				else:
+                                        cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
