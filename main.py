@@ -189,7 +189,7 @@ class CamaraProcessing:
 			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
 			self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
 
-  		# Get the output layer names of the model
+		# Get the output layer names of the model
 		self.layer_names = self.net.getLayerNames()
 		self.layer_names = [self.layer_names[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
 
@@ -454,7 +454,7 @@ class CamaraProcessing:
 				if self.detect_just_left_side:
 					cv2.line(frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
 				else:
-                    cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
+					cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
 
 			# use the centroid tracker to associate the (1) old object
 			# centroids with (2) the newly computed object centroids
@@ -615,9 +615,9 @@ def index():
 
 BaseManager.register("socketManager", SocketIOProcess)
 def getManager():
-    m = BaseManager()
-    m.start()
-    return m
+	m = BaseManager()
+	m.start()
+	return m
 
 if __name__ == '__main__':
 	# Initialize Socket Manager.
@@ -640,7 +640,7 @@ if __name__ == '__main__':
 		inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		flags.append(Value(ctypes.c_bool, False))
-		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
+		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
 		processReference[-1].start()
 		
 		sources.append(camara["source"])
