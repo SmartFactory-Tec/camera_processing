@@ -27,7 +27,7 @@ import math
 import socketio
 import socket
 
-CAMARAIDS = [6, 7]
+CAMARAIDS = [8]
 BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
 NGROK_AVAILABLE = True
 GPU_AVAILABLE = True
@@ -172,10 +172,11 @@ class CamaraProcessing:
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, v_orientation, distance_violation, inputFrame, outputFrame, frameShape, flag, socketManager):
+	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, inputFrame, outputFrame, frameShape, flag, socketManager):
 		self.id = id
 		self.v_orientation = v_orientation
-		self.distance_violation = distance_violation
+		self.run_distance_violation = run_distance_violation
+		self.detect_just_left_side = detect_just_left_side
 		self.camaraId = "Camara" + str(self.id)
 		self.socketManager = socketManager
 		self.socketManager.setCamaraURL(self.id)
@@ -333,6 +334,13 @@ class CamaraProcessing:
 
 		return boxes, confidences, classids
 
+	def is_in_valid_area(self, box):
+		startX, startY, width, height = box
+		if self.detect_just_left_side:
+			centroid = ((startX + width)//2, (startY + height)//2)
+			return centroid[0] < self.W // 2
+		return True
+	
 	def gen_frames(self, inputFrame_, outputFrame_, flag):
 		# Loop over frames from the video stream.
 
@@ -390,7 +398,7 @@ class CamaraProcessing:
 
 							# filter out weak detections by requiring a minimum
 							# confidence
-							if confidence > CONFIDENCE_:
+							if confidence > CONFIDENCE_ and self.is_in_valid_area(boxes[i]):
 								# extract the index of the class label from the
 								# detections list
 								idx = int(classids[i])
@@ -452,7 +460,7 @@ class CamaraProcessing:
 			points = object_position_data["rect"]
 
 			# get social distancing violations and points of violation
-			if self.distance_violation:
+			if self.run_distance_violation:
 				violate = self.get_social_distance_violations(objects)
 			else:
 				violate = []
@@ -629,7 +637,7 @@ if __name__ == '__main__':
 		inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		flags.append(Value(ctypes.c_bool, False))
-		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["distance_violation"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
+		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
 		processReference[-1].start()
 		
 		sources.append(camara["source"])
