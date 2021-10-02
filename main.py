@@ -105,7 +105,7 @@ class SocketIOProcess:
 			))
 
 class CamaraRead:
-	MAX_FPS = 33
+	MAX_FPS = 34
 	MAX_SKIP = 3
 
 	def __init__(self, sources, inputFrames, frameShapes, flags, args):
