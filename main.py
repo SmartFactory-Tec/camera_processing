@@ -27,13 +27,13 @@ import socketio
 import socket
 
 ARGS= {
-	"CAMARAIDS": [8]
-	"BACK_ENDPOINT": ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
-	"NGROK_AVAILABLE": True
-	"GPU_AVAILABLE": True
-	"VERBOSE": False
-	"CONFIDENCE": 0.3
-	"SKIP_FRAMES": 25
+	"CAMARAIDS": [8],
+	"BACK_ENDPOINT": ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0],
+	"NGROK_AVAILABLE": True,
+	"GPU_AVAILABLE": True,
+	"VERBOSE": False,
+	"CONFIDENCE": 0.3,
+	"SKIP_FRAMES": 25,
 }
 
 app = Flask(__name__)
