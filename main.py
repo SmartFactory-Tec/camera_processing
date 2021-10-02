@@ -9,7 +9,6 @@ from pyimagesearch.trackableobject import TrackableObject
 from flask import Flask, render_template, Response
 from imutils.video import VideoStream
 from imutils.video import FPS
-from dotenv import load_dotenv
 from scipy.spatial import distance as dist
 from queue import Queue
 import os
@@ -27,22 +26,24 @@ import math
 import socketio
 import socket
 
-CAMARAIDS = [8]
-BACK_ENDPOINT = ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
-NGROK_AVAILABLE = True
-GPU_AVAILABLE = True
-VERBOSE = False
-CONFIDENCE_ = 0.3
-SKIP_FRAMES_ = 25
+ARGS= {
+	"CAMARAIDS": [8]
+	"BACK_ENDPOINT": ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0]
+	"NGROK_AVAILABLE": True
+	"GPU_AVAILABLE": True
+	"VERBOSE": False
+	"CONFIDENCE": 0.3
+	"SKIP_FRAMES": 25
+}
 
-load_dotenv()
 app = Flask(__name__)
 
 class SocketIOProcess:
 	sio = socketio.Client()
 
-	def __init__(self):
-		self.camaraIDs = CAMARAIDS
+	def __init__(self, args):
+		self.args = args
+		self.camaraIDs = self.args["CAMARAIDS"]
 		self.quantityCamaras = len(self.camaraIDs)
 		self.camarasInfo = []
 		self.sioConnected = False
@@ -50,7 +51,7 @@ class SocketIOProcess:
 		self.sio.on('connect', self.connectSIO)
 		self.sio.on('disconnect', self.disconnectSIO)
 		self.sio.on('visionInit', self.visionInitSIO)
-		self.sio.connect(BACK_ENDPOINT)
+		self.sio.connect(self.args["BACK_ENDPOINT"])
 	
 	def connectSIO(self):
 		print('Connected')
@@ -93,7 +94,7 @@ class SocketIOProcess:
 	
 	def setCamaraURL(self, id):
 		if self.sioConnected:
-			if NGROK_AVAILABLE:
+			if self.args["NGROK_AVAILABLE"]:
 				endpoint = 'http://sems.ngrok.io/camara/'
 			else:	
 				endpoint = 'http://' + socket.getfqdn() + ':8080/camara/'
@@ -105,13 +106,14 @@ class SocketIOProcess:
 
 class CamaraRead:
 	MAX_FPS = 33
-	MAX_SKIP = 2
+	MAX_SKIP = 3
 
-	def __init__(self, sources, inputFrames, frameShapes, flags):
+	def __init__(self, sources, inputFrames, frameShapes, flags, args):
 		self.sources = sources
 		self.inputFrames = inputFrames
 		self.frameShapes = frameShapes
 		self.flags = flags
+		self.args = args
 		for index in range(len(sources)):
 			readThread = threading.Thread(target=self.mainLoop, args=(index,), daemon=True)
 			readThread.start()
@@ -161,18 +163,16 @@ class CamaraRead:
 				pass
 
 class CamaraProcessing:
-	API_ENDPOINT = os.getenv("API_ENDPOINT")
 	COLOR_RED = (0, 0, 255)
 	COLOR_GREEN = (0, 255, 0)
 	COLOR_BLACK = (0, 0, 0)
 	socialDistanceThreshold = 90
 	
-	# Initialize list of class labels MobileNet SSD was trained to detect
 	CLASSES = None
 	with open('yolo/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
-	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, inputFrame, outputFrame, frameShape, flag, socketManager):
+	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, inputFrame, outputFrame, frameShape, flag, socketManager, args):
 		self.id = id
 		self.v_orientation = v_orientation
 		self.run_distance_violation = run_distance_violation
@@ -180,10 +180,11 @@ class CamaraProcessing:
 		self.camaraId = "Camara" + str(self.id)
 		self.socketManager = socketManager
 		self.socketManager.setCamaraURL(self.id)
+		self.args = args
 
 		# Load Model
 		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
-		if GPU_AVAILABLE:
+		if self.args["GPU_AVAILABLE"]:
 			# set CUDA as the preferable backend and target
 			print("[INFO] setting preferable backend and target to CUDA...")
 			self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
@@ -384,9 +385,9 @@ class CamaraProcessing:
 				end = time.time()
 				print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
 
-				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, CONFIDENCE_)
+				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, self.args["CONFIDENCE"])
 
-				idxs = cv2.dnn.NMSBoxes(boxes, confidences, CONFIDENCE_, self.NMS_THRESH)
+				idxs = cv2.dnn.NMSBoxes(boxes, confidences, self.args["CONFIDENCE"], self.NMS_THRESH)
 
 				# loop over the detections
 				if len(idxs) > 0:
@@ -398,7 +399,7 @@ class CamaraProcessing:
 
 							# filter out weak detections by requiring a minimum
 							# confidence
-							if confidence > CONFIDENCE_ and self.is_in_valid_area(boxes[i]):
+							if confidence > self.args["CONFIDENCE"] and self.is_in_valid_area(boxes[i]):
 								# extract the index of the class label from the
 								# detections list
 								idx = int(classids[i])
@@ -563,7 +564,7 @@ class CamaraProcessing:
 			outputFrame_[:] = frame
 
 			# Show the output frame.
-			if VERBOSE:
+			if self.args["VERBOSE"]:
 				cv2.imshow("Frame", frame)
 				key = cv2.waitKey(1) & 0xFF
 
@@ -572,7 +573,7 @@ class CamaraProcessing:
 					break
 
 			# Increment frames counter.
-			self.totalFrames = (self.totalFrames + 1) % SKIP_FRAMES_
+			self.totalFrames = (self.totalFrames + 1) % self.args["SKIP_FRAMES"]
 				
 			# Update FPS counter.
 			self.fps.update()
@@ -584,7 +585,6 @@ class CamaraProcessing:
 
 		# close any open windows
 		cv2.destroyAllWindows()
-
 
 processReference = []
 sources = []
@@ -611,7 +611,7 @@ def showFrame(id):
 @app.route('/')
 def index():
 	"""Video streaming home page."""
-	return render_template('indexv4.html', len = len(CAMARAIDS), camaraIDs = CAMARAIDS)
+	return render_template('indexv4.html', len = len(ARGS["CAMARAIDS"]), camaraIDs = ARGS["CAMARAIDS"])
 
 BaseManager.register("socketManager", SocketIOProcess)
 def getManager():
@@ -622,7 +622,7 @@ def getManager():
 if __name__ == '__main__':
 	# Initialize Socket Manager.
 	manager = getManager()
-	socketManager = manager.socketManager()
+	socketManager = manager.socketManager(ARGS)
 
 	# Wait till Camaras Info Received.
 	while not socketManager.getCamaraInfo():
@@ -640,12 +640,12 @@ if __name__ == '__main__':
 		inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
 		flags.append(Value(ctypes.c_bool, False))
-		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager)))
+		processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager, ARGS)))
 		processReference[-1].start()
 		
 		sources.append(camara["source"])
 
-	readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags))
+	readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags, ARGS))
 	readProcessRef.start()
 
 	from waitress import serve
