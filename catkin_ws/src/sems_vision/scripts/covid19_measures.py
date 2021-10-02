@@ -20,36 +20,44 @@ import math
 import copy
 
 ARGS= {
-	"GPU_AVAILABLE": True,
+    "GPU_AVAILABLE": True,
     "MODELS_PATH": str(pathlib.Path(__file__) / "../../../../models",
     "CONFIDENCE": 0.5,
 }
 
 class Person:
-    def __init__(self, xpixel, ypixel, x, y, w, h):
-        self.xpixel = xpixel
-        self.ypixel = ypixel
+    def __init__(self, xCentroid, yCentroid, x, y, w, h, pcl_):
+        self.point2D = (xCentroid, yCentroid)
+        self.point3D = (0, 0, 0)
         self.x = x
         self.y = y
         self.w = w
         self.h = h
         self.drawed = False
-        # depth_pixel = [self.xpixel, self.ypixel]
-        # udist =  depth_frame.get_distance(self.xpixel, self.ypixel)
-        # self.point = rs.rs2_deproject_pixel_to_point(color_intrin, depth_pixel,udist*(depth_scale*1000))
+        self.deproject_pixel_to_point(pcl_)
+    
+    def deproject_pixel_to_point(self, pcl_):
+        x = self.point2D[0]
+        y = self.point2D[1]
+        arrayPosition = y*pcl_.row_step + x*pcl_.point_step;
+        arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
+        arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
+        arrayPosZ = arrayPosition + pcl_.fields[2].offset # Z has an offset of 8
+
+        self.point3D = (pcl_.data[arrayPosX], pcl_.data[arrayPosY], pcl_.data[arrayPosZ])
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
-	COLOR_GREEN = (0, 255, 0)
+    COLOR_GREEN = (0, 255, 0)
     COLOR_BLUE = (255, 0, 0)
-	COLOR_BLACK = (0, 0, 0)
+    COLOR_BLACK = (0, 0, 0)
 
     CLASSES = None
-	with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
-		CLASSES = [line.strip() for line in f.readlines()]
+    with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
+        CLASSES = [line.strip() for line in f.readlines()]
 
     def __init__(self):
-		self.bridge = CvBridge()
+        self.bridge = CvBridge()
         self.image_sub = rospy.Subscriber("/zed/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed/zed_node/rgb/image_raw_color", Image, self.callback_rgb)
         self.pc_sub = rospy.Subscriber("/zed/zed_node/point_cloud/cloud_registered", PointCloud2, self.callback_pc)
@@ -100,29 +108,28 @@ class CamaraProcessing:
         loadFacesModel(self)
         loadMasksModel(self)
         print("[INFO] Models Loaded")
-        
 
         # Frames per second throughput estimator
-		self.fps = None
-		callFpsThread = threading.Thread(target=self.callFps, args=(), daemon=True)
-		callFpsThread.start()
+        self.fps = None
+        callFpsThread = threading.Thread(target=self.callFps, args=(), daemon=True)
+        callFpsThread.start()
 
         try:
-			self.run()
-		except KeyboardInterrupt:
-			self.end_process()
+            self.run()
+        except KeyboardInterrupt:
+            pass
     
     def callFps(self):	
-		if self.fps != None:
-			self.fps.stop()
-			print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
-			print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
-			self.fpsValue = self.fps.fps()
+        if self.fps != None:
+            self.fps.stop()
+            print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
+            print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
+            self.fpsValue = self.fps.fps()
 
-		self.fps = FPS().start()
-		
-		callFpsThread = threading.Timer(2.0, self.callFps, args=())
-		callFpsThread.start()
+        self.fps = FPS().start()
+        
+        callFpsThread = threading.Timer(2.0, self.callFps, args=())
+        callFpsThread.start()
 
     def callback_depth(self, data):
         try:
@@ -199,7 +206,7 @@ class CamaraProcessing:
                             ymid = int(y + h/2)
                             dist = depth_frame.get_distance(xmid, ymid)
                             diststr = '%.4f' % dist
-                            self.persons.append(Person(xmid, ymid, x, y, w, h))
+                            self.persons.append(Person(xmid, ymid, x, y, w, h, self.pointcloud))
                             cv2.putText(self.cv_image_rgb, diststr, (x, y + 50), font, 2, COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
@@ -291,7 +298,7 @@ class CamaraProcessing:
                 for i, iperson in enumerate(self.persons):
                     for j, jperson in enumerate(self.persons):
                         if i != j:
-                            distance = calculatedistance(iperson.point,jperson.point)
+                            distance = calculatedistance(iperson.point3D,jperson.point3D)
                             distances[i].append(distance)
                             distances[j].append(distance)
                 for i, iperson in enumerate(self.persons):
@@ -315,7 +322,7 @@ class CamaraProcessing:
             self.publish()
             
             # Update FPS counter.
-			self.fps.update()
+            self.fps.update()
 
 def main():
     rospy.init_node('Covid19Measures', anonymous=True)
