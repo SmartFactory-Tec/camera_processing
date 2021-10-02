@@ -24,3 +24,7 @@ people-counter/
 #yolo model
 *.weights
 *.cfg
+
+#catkin_ws
+catkin_ws/build/
+catkin_ws/devel
