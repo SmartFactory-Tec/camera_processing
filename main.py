@@ -169,7 +169,7 @@ class CamaraProcessing:
 	socialDistanceThreshold = 90
 	
 	CLASSES = None
-	with open('yolo/coco.names', 'r') as f:
+	with open('models/people/coco.names', 'r') as f:
 		CLASSES = [line.strip() for line in f.readlines()]
 	
 	def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, inputFrame, outputFrame, frameShape, flag, socketManager, args):
@@ -183,7 +183,7 @@ class CamaraProcessing:
 		self.args = args
 
 		# Load Model
-		self.net = cv2.dnn.readNetFromDarknet('yolo/yolov3.cfg', 'yolo/yolov3.weights')
+		self.net = cv2.dnn.readNetFromDarknet('models/people/yolov3.cfg', 'models/people/yolov3.weights')
 		if self.args["GPU_AVAILABLE"]:
 			# set CUDA as the preferable backend and target
 			print("[INFO] setting preferable backend and target to CUDA...")
