@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # USAGE
 # python covid19_measures.py
 
@@ -5,12 +6,14 @@
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
+from imutils.video import FPS
+import threading
 import pathlib
 import argparse
 import time
 import os
 import rospy
-from sensor_msgs.msg import CompressedImage, Image, PointCloud2
+from sensor_msgs.msg import CompressedImage, Image, PointCloud2, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Int16
 from std_msgs.msg import Float32MultiArray
@@ -21,9 +24,10 @@ import copy
 
 ARGS= {
     "GPU_AVAILABLE": True,
-    "MODELS_PATH": str(pathlib.Path(__file__) / "../../../../models",
+    "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
 }
+print(ARGS)
 
 class Person:
     def __init__(self, xCentroid, yCentroid, x, y, w, h, pcl_):
@@ -39,7 +43,7 @@ class Person:
     def deproject_pixel_to_point(self, pcl_):
         x = self.point2D[0]
         y = self.point2D[1]
-        arrayPosition = y*pcl_.row_step + x*pcl_.point_step;
+        arrayPosition = y*pcl_.row_step + x*pcl_.point_step
         arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
         arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
         arrayPosZ = arrayPosition + pcl_.fields[2].offset # Z has an offset of 8
@@ -58,15 +62,19 @@ class CamaraProcessing:
 
     def __init__(self):
         self.bridge = CvBridge()
-        self.image_sub = rospy.Subscriber("/zed/zed_node/depth/depth_registered", Image, self.callback_depth)
-        self.rgb_sub = rospy.Subscriber("/zed/zed_node/rgb/image_raw_color", Image, self.callback_rgb)
-        self.pc_sub = rospy.Subscriber("/zed/zed_node/point_cloud/cloud_registered", PointCloud2, self.callback_pc)
-        self.publisherImage = rospy.Publisher("/zed2/image/compressed", CompressedImage, queue_size = 1)
-        self.publisherPeople = rospy.Publisher("/zed2/people_count", Int16, queue_size = 10)
-        self.publisherDistanceViolations = rospy.Publisher("/zed2/distance_violations", Int16, queue_size = 10)
-        self.publisherMaskCorrect = rospy.Publisher("/zed2/masks_correct", Int16, queue_size = 10)
-        self.publisherMaskViolations = rospy.Publisher("/zed2/masks_violations", Int16, queue_size = 10)
+        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
+        self.depth_sub_info = rospy.Subscriber("/zed2/zed_node/depth/camera_info", CameraInfo, self.callback_depth_info)
+        self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
+        self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
+        self.pc_sub = rospy.Subscriber("/zed2/zed_node/point_cloud/cloud_registered", PointCloud2, self.callback_pc)
+        self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
+        self.publisherPeople = rospy.Publisher("/zed2_/people_count", Int16, queue_size = 10)
+        self.publisherDistanceViolations = rospy.Publisher("/zed2_/distance_violations", Int16, queue_size = 10)
+        self.publisherMaskCorrect = rospy.Publisher("/zed2_/masks_correct", Int16, queue_size = 10)
+        self.publisherMaskViolations = rospy.Publisher("/zed2_/masks_violations", Int16, queue_size = 10)
+        self.depth_image_info = CameraInfo()
         self.depth_image = []
+        self.cv_image_rgb_info = CameraInfo()
         self.cv_image_rgb = []
         self.cv_image_rgb_processed = []
         self.pointcloud = PointCloud2()
@@ -79,7 +87,7 @@ class CamaraProcessing:
         # Load Models
         print("[INFO] Loading models...")
         def loadPersonsModel(self):
-            weightsPath = ARGS["MODELS_PATH"] + "/people/People/yolov4.weights"
+            weightsPath = ARGS["MODELS_PATH"] + "/people/yolov4.weights"
             cfgPath = ARGS["MODELS_PATH"] + "/people/yolov4.cfg"
             self.peopleNet = cv2.dnn.readNet(weightsPath, cfgPath)
             if ARGS["GPU_AVAILABLE"]:
@@ -145,6 +153,14 @@ class CamaraProcessing:
 
     def callback_pc(self, data):
         self.pointcloud = data
+    
+    def callback_rgb_info(self, data):
+        self.cv_image_rgb_info = data
+        self.rgb_sub_info.unregister()
+    
+    def callback_depth_info(self, data):
+        self.depth_image_info = data
+        self.depth_sub_info.unregister()
 
     def publish(self):
         img = CompressedImage()
@@ -159,12 +175,17 @@ class CamaraProcessing:
         self.publisherMaskViolations.publish(self.mask_violations)
         self.publisherMaskCorrect.publish(self.mask_correct)
 
-    def run():
+    def run(self):
         while not rospy.is_shutdown():
             if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
 
             def detect_and_predict_people(self):
+                def calculatedistance(point1,point2):
+                    return  math.sqrt(
+                                math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
+                                    point1[2] - point2[2], 2))
+
                 height, width, channels = self.cv_image_rgb.shape
                 blob = cv2.dnn.blobFromImage(self.cv_image_rgb, 1 / 255.0, (320, 320), swapRB=True, crop=False)
                 self.peopleNet.setInput(blob)
@@ -194,20 +215,17 @@ class CamaraProcessing:
             
                 indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
                 font = cv2.FONT_HERSHEY_PLAIN
-                colors = np.random.uniform(0, 255, size=(len(classes), 3))
                 self.persons = []
-                color_image_multiple = copy.copy(np.asanyarray(color_frame.get_data()))
                 for i in range(len(boxes)):
                     if i in indexes:
                         x, y, w, h = boxes[i]
-                        label = str(classes[class_ids[i]])
+                        label = str(CamaraProcessing.CLASSES[class_ids[i]])
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
-                            dist = depth_frame.get_distance(xmid, ymid)
-                            diststr = '%.4f' % dist
                             self.persons.append(Person(xmid, ymid, x, y, w, h, self.pointcloud))
-                            cv2.putText(self.cv_image_rgb, diststr, (x, y + 50), font, 2, COLOR_BLUE, 3)
+                            diststr = '%.4f' % calculatedistance(self.persons[-1].point3D, [0,0,0])
+                            cv2.putText(self.cv_image_rgb, diststr, (x, y + 50), font, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
 
@@ -293,7 +311,7 @@ class CamaraProcessing:
                 self.distance_violations = 0
                 distances = []
                 for index, person in enumerate(self.persons):
-                    distances.append = []
+                    distances.append([])
 
                 for i, iperson in enumerate(self.persons):
                     for j, jperson in enumerate(self.persons):
@@ -308,17 +326,20 @@ class CamaraProcessing:
                     h = iperson.h
                     for idist in distances[i]:
                         if idist < float(1.0):
-                            cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), COLOR_RED, 2)
+                            cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_RED, 2)
                             iperson.drawed = True
                             self.distance_violations = self.distance_violations + 1
                             break
                     if iperson.drawed == False:
-                        cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), COLOR_GREEN, 2)
-                            
-                cv2.putText(self.cv_image_rgb, 'Distance Violations:' + str(self.distance_violations), (5,25), font, 2, COLOR_BLUE, 3)
+                        cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_GREEN, 2)
+                
+                font = cv2.FONT_HERSHEY_PLAIN
+                cv2.putText(self.cv_image_rgb, 'Distance Violations:' + str(self.distance_violations), (5,25), font, 2, CamaraProcessing.COLOR_BLUE, 3)
 
             social_distancing(self)
 
+            cv2.imshow("Frame", self.cv_image_rgb)
+            cv2.waitKey(1)
             self.publish()
             
             # Update FPS counter.
