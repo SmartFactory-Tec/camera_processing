@@ -30,30 +30,74 @@ ARGS= {
 print(ARGS)
 
 class Person:
-    def __init__(self, xCentroid, yCentroid, x, y, w, h, pcl_):
+    def __init__(self, xCentroid, yCentroid, x, y, w, h, img_width, img_height, depthframe_):
         self.point2D = (xCentroid, yCentroid)
         self.point3D = (0, 0, 0)
         self.x = x
         self.y = y
+        self.depth = 0 
         self.w = w
         self.h = h
+        self.img_width = img_width
+        self.img_height = img_height
         self.drawed = False
-        self.deproject_pixel_to_point(pcl_)
+        self.get_depth(depthframe_)
     
-    def deproject_pixel_to_point(self, pcl_):
-        heightRGB, widthRGB, channelsRGB = self.cv_image_rgb.shape
-        heightPCL, widthPCL = (pcl_.height, pcl_.width)
+    def get_depth(self, depthframe_):
+        heightRGB, widthRGB = (self.img_height, self.img_width)
+        heightDEPTH, widthDEPTH = (depthframe_.shape[0], depthframe_.shape[1])
+        
         def map(x, in_min, in_max, out_min, out_max):
             return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
         
         x = map(self.point2D[0], 0, widthRGB, 0, widthRGB)
-        y = map(self.point2D[1], 0, widthPCL, 0, widthPCL)
-        arrayPosition = y*pcl_.row_step + x*pcl_.point_step
-        arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
-        arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
-        arrayPosZ = arrayPosition + pcl_.fields[2].offset # Z has an offset of 8
+        y = map(self.point2D[1], 0, widthDEPTH, 0, widthDEPTH)
 
-        self.point3D = (pcl_.data[arrayPosX], pcl_.data[arrayPosY], pcl_.data[arrayPosZ])
+        def medianCalculation(x, y, width, height, depthframe_):
+            medianArray = []
+            requiredValidValues = 20
+            def spiral(medianArray, depthframe_, requiredValidValues, startX, startY, endX, endY, width, height):
+                if startX <  0 and startY < 0 and endX > width and endY > height:
+                    return
+                for i in range(startX, endX + 1):
+                    if i >= width:
+                        break
+                    if startY >= 0 and math.isfinite(depthframe_[startY][i]):
+                        medianArray.append(depthframe_[startY][i])
+                    if startY != endY and endY < height and math.isfinite(depthframe_[endY][i]):
+                        medianArray.append(depthframe_[endY][i])
+                    if len(medianArray) > requiredValidValues:
+                        return
+                for i in range(startY + 1, endY):
+                    if i >= height:
+                        break
+                    if startX >= 0 and math.isfinite(depthframe_[i][startX]):
+                        medianArray.append(depthframe_[i][startX])
+                    if startX != endX and endX < width and math.isfinite(depthframe_[i][endX]):
+                        medianArray.append(depthframe_[i][endX])
+                    if len(medianArray) > requiredValidValues:
+                        return
+                # Check Next Spiral
+                spiral(medianArray, depthframe_, requiredValidValues, startX - 1, startY - 1, endX + 1, endY + 1, width, height)
+            
+            # Check Spirals around Centroid till requiredValidValues
+            spiral(medianArray, depthframe_, requiredValidValues, x, y, x, y, width, height)
+            if len(medianArray) == 0:
+                return float("NaN")
+            medianArray.sort()
+            print(medianArray)
+            return medianArray[len(medianArray)//2]
+        
+        self.depth = medianCalculation(x,y, widthDEPTH, heightDEPTH, depthframe_)
+        
+    def get_3DPoint():
+        pass
+        # arrayPosition = y*pcl_.row_step + x*pcl_.point_step
+        # arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
+        # arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
+        # arrayPosZ = arrayPosition + pcl_.fields[2].offset # Z has an offset of 8
+        # self.point3D = (pcl_.data[arrayPosX], pcl_.data[arrayPosY], pcl_.data[arrayPosZ])
+        # print(heightRGB, widthRGB, heightPCL, widthPCL, self.point3D)
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
@@ -219,7 +263,6 @@ class CamaraProcessing:
                             class_ids.append(class_id)
             
                 indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-                font = cv2.FONT_HERSHEY_PLAIN
                 self.persons = []
                 for i in range(len(boxes)):
                     if i in indexes:
@@ -228,9 +271,9 @@ class CamaraProcessing:
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
-                            self.persons.append(Person(xmid, ymid, x, y, w, h, self.pointcloud))
-                            diststr = '%.4f' % calculatedistance(self.persons[-1].point3D, [0,0,0])
-                            cv2.putText(self.cv_image_rgb, diststr, (x, y + 50), font, 2, CamaraProcessing.COLOR_BLUE, 3)
+                            self.persons.append(Person(xmid, ymid, x, y, w, h, width, height, self.depth_image))
+                            diststr = str(self.persons[-1].depth)
+                            cv2.putText(self.cv_image_rgb, diststr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
 
@@ -305,10 +348,10 @@ class CamaraProcessing:
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
                     cv2.rectangle(self.cv_image_rgb, (startX, startY), (endX, endY), color, 2)
 
-            detect_mask_violations(self)
+            # detect_mask_violations(self)
 
             def social_distancing(self):
-                def calculatedistance(point1,point2):
+                def calculatedistance(point1, point2):
                     return  math.sqrt(
                                 math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
                                     point1[2] - point2[2], 2))
@@ -324,6 +367,7 @@ class CamaraProcessing:
                             distance = calculatedistance(iperson.point3D,jperson.point3D)
                             distances[i].append(distance)
                             distances[j].append(distance)
+
                 for i, iperson in enumerate(self.persons):
                     x = iperson.x
                     y = iperson.y
@@ -337,9 +381,8 @@ class CamaraProcessing:
                             break
                     if iperson.drawed == False:
                         cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_GREEN, 2)
-                
-                font = cv2.FONT_HERSHEY_PLAIN
-                cv2.putText(self.cv_image_rgb, 'Distance Violations:' + str(self.distance_violations), (5,25), font, 2, CamaraProcessing.COLOR_BLUE, 3)
+
+                cv2.putText(self.cv_image_rgb, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
 
             social_distancing(self)
 
