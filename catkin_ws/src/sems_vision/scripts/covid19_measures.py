@@ -41,8 +41,13 @@ class Person:
         self.deproject_pixel_to_point(pcl_)
     
     def deproject_pixel_to_point(self, pcl_):
-        x = self.point2D[0]
-        y = self.point2D[1]
+        heightRGB, widthRGB, channelsRGB = self.cv_image_rgb.shape
+        heightPCL, widthPCL = (pcl_.height, pcl_.width)
+        def map(x, in_min, in_max, out_min, out_max):
+            return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
+        
+        x = map(self.point2D[0], 0, widthRGB, 0, widthRGB)
+        y = map(self.point2D[1], 0, widthPCL, 0, widthPCL)
         arrayPosition = y*pcl_.row_step + x*pcl_.point_step
         arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
         arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
