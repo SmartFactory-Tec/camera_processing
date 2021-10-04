@@ -185,7 +185,7 @@ def calculatedistance(point1, point2):
 
 def get_optimal_font_scale(text, width):
     for scale in reversed(range(0, 60)):
-        textSize = cv2.getTextSize(text, fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=1)
+        textSize = cv2.getTextSize(text, fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=2)
         (new_width, new_height) = textSize[0]
         if (new_width <= width):
             return (scale/10, new_height)
@@ -484,10 +484,11 @@ class CamaraProcessing:
                     cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
                     for mask in self.masks:
                         (centroid, usingMask, label) = mask
+                        labelColor = CamaraProcessing.COLOR_RED if not usingMask else CamaraProcessing.COLOR_GREEN
                         if point_inside_rect(centroid, iperson.rect):
                             (textScale, textHeight) = get_optimal_font_scale(label, w - 10)
                             # SHOW MASK LABEL - ADDIMG
-                            cv2.putText(self.cv_image_rgb_drawed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLUE, 2)
+                            cv2.putText(self.cv_image_rgb_drawed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, labelColor, 2)
                 
                 def add_logo(self):
                     padding = (50, 25)
