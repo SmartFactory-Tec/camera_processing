@@ -407,7 +407,7 @@ class CamaraProcessing:
 
                             # Preprocess Image
                             face = frame[startY:endY, startX:endX]
-                            if len(face) == 0:
+                            if len(face) == 0 or startY == startX or endX == endY:
                                 continue
                             face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
                             face = cv2.resize(face, (224, 224))
