@@ -24,7 +24,7 @@ import cv2
 import math
 import copy
 import sys
-sys.path.append('../include')
+sys.path.append(str(pathlib.Path(__file__).parent) + '/../include')
 from sems_vision_utils import *
 
 FLT_EPSILON = sys.float_info.epsilon
