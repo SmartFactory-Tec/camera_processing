@@ -73,10 +73,9 @@ def get_depth(rgbframe_, depthframe_, pixel):
         if len(medianArray) == 0:
             return float("NaN")
         medianArray.sort()
-        print(medianArray)
-        return medianArray[len(medianArray)#2]
+        return medianArray[len(medianArray) // 2]
     
-    return medianCalculation(x,y, widthDEPTH, heightDEPTH, depthframe_)
+    return medianCalculation(x, y, widthDEPTH, heightDEPTH, depthframe_)
 
 def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
     def CameraInfoToIntrinsics(cameraInfo):
@@ -105,7 +104,7 @@ def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
     xo = x
     yo = y
 
-    if (intrinsics["model"] == RS2_DISTORTION_INVERSE_BROWN_CONRADY):
+    if (intrinsics["model"] == "RS2_DISTORTION_INVERSE_BROWN_CONRADY"):
         # need to loop until convergence 
         # 10 iterations determined empirically
         for i in range(10):
@@ -148,10 +147,10 @@ def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
         y *= r / rd
 
     if intrinsics["model"] == "RS2_DISTORTION_FTHETA":
-        float rd = math.sqrt(x * x + y * y)
+        rd = float(math.sqrt(x * x + y * y))
         if rd < FLT_EPSILON:
             rd = FLT_EPSILON
-        float r = (float)(math.tan(intrinsics["coeffs"][0] * rd) / math.atan(2 * math.tan(intrinsics["coeffs"][0] / 2.0f)))
+        r = (float)(math.tan(intrinsics["coeffs"][0] * rd) / math.atan(2 * math.tan(intrinsics["coeffs"][0] / float(2.0))))
         x *= r / rd
         y *= r / rd
 
@@ -341,8 +340,8 @@ class CamaraProcessing:
                             person_depth = get_depth(self.cv_image_rgb, self.depth_image, (xmid, ymid))
                             point3D = deproject_pixel_to_point(self.cv_image_rgb_info, (xmid, ymid), person_depth)
                             self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
-                            diststr = str(point3D)
-                            cv2.putText(self.cv_image_rgb, diststr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
+                            diststr = str(tuple(map(lambda x: round(x, 2), point3D)))
+                            cv2.putText(self.cv_image_rgb, diststr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 1.2, CamaraProcessing.COLOR_BLUE, 2)
             
             detect_and_predict_people(self)
 
@@ -438,10 +437,7 @@ class CamaraProcessing:
                             distances[j].append(distance)
 
                 for i, iperson in enumerate(self.persons):
-                    x = iperson.x
-                    y = iperson.y
-                    w = iperson.w
-                    h = iperson.h
+                    x, y, w, h = iperson.rect
                     for idist in distances[i]:
                         if idist < float(1.0):
                             cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_RED, 2)
