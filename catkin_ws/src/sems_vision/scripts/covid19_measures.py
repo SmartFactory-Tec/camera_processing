@@ -28,8 +28,8 @@ ARGS= {
     "GPU_AVAILABLE": True,
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
+    "SHOW_FACES": True,
 }
-print(ARGS)
 
 def get_depth(rgbframe_, depthframe_, pixel):
     heightRGB, widthRGB = (rgbframe_.shape[0], rgbframe_.shape[1])
@@ -162,8 +162,7 @@ class Person:
         self.point2D = (xCentroid, yCentroid)
         self.point3D = point3D
         self.rect = (x, y, w, h)
-        self.drawed = False
-
+        self.distanceViolation = False
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
@@ -178,23 +177,20 @@ class CamaraProcessing:
     def __init__(self):
         self.bridge = CvBridge()
         self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
-        self.depth_sub_info = rospy.Subscriber("/zed2/zed_node/depth/camera_info", CameraInfo, self.callback_depth_info)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
-        self.pc_sub = rospy.Subscriber("/zed2/zed_node/point_cloud/cloud_registered", PointCloud2, self.callback_pc)
         self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
         self.publisherPeople = rospy.Publisher("/zed2_/people_count", Int16, queue_size = 10)
         self.publisherDistanceViolations = rospy.Publisher("/zed2_/distance_violations", Int16, queue_size = 10)
         self.publisherMaskCorrect = rospy.Publisher("/zed2_/masks_correct", Int16, queue_size = 10)
         self.publisherMaskViolations = rospy.Publisher("/zed2_/masks_violations", Int16, queue_size = 10)
-        self.depth_image_info = CameraInfo()
         self.depth_image = []
-        self.cv_image_rgb_info = CameraInfo()
         self.cv_image_rgb = []
         self.cv_image_rgb_processed = []
-        self.pointcloud = PointCloud2()
+        self.cv_image_rgb_info = CameraInfo()
         
         self.persons = []
+        self.masks = []
         self.distanceviolations = 0
         self.mask_correct = 0
         self.mask_violations = 0
@@ -266,22 +262,15 @@ class CamaraProcessing:
         except CvBridgeError as e:
             print(e)
 
-    def callback_pc(self, data):
-        self.pointcloud = data
-    
     def callback_rgb_info(self, data):
         self.cv_image_rgb_info = data
         self.rgb_sub_info.unregister()
-    
-    def callback_depth_info(self, data):
-        self.depth_image_info = data
-        self.depth_sub_info.unregister()
 
     def publish(self):
         img = CompressedImage()
         img.header.stamp = rospy.Time.now()
         img.format = "jpeg"
-        img.data = np.array(cv2.imencode('.jpg', self.cv_image_rgb)[1]).tostring()
+        img.data = np.array(cv2.imencode('.jpg', self.cv_image_rgb_processed)[1]).tostring()
         
         # Publish data.
         self.publisherImage.publish(img)
@@ -291,9 +280,13 @@ class CamaraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
+        cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         while not rospy.is_shutdown():
             if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
+
+            self.cv_image_rgb_processed = self.cv_image_rgb.copy()
 
             def detect_and_predict_people(self):
                 def calculatedistance(point1,point2):
@@ -301,8 +294,8 @@ class CamaraProcessing:
                                 math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
                                     point1[2] - point2[2], 2))
 
-                height, width, channels = self.cv_image_rgb.shape
-                blob = cv2.dnn.blobFromImage(self.cv_image_rgb, 1 / 255.0, (320, 320), swapRB=True, crop=False)
+                height, width, channels = self.cv_image_rgb_processed.shape
+                blob = cv2.dnn.blobFromImage(self.cv_image_rgb_processed, 1 / 255.0, (320, 320), swapRB=True, crop=False)
                 self.peopleNet.setInput(blob)
                 outs = self.peopleNet.forward(self.output_layers)
 
@@ -337,17 +330,18 @@ class CamaraProcessing:
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
-                            person_depth = get_depth(self.cv_image_rgb, self.depth_image, (xmid, ymid))
+                            person_depth = get_depth(self.cv_image_rgb_processed, self.depth_image, (xmid, ymid))
                             point3D = deproject_pixel_to_point(self.cv_image_rgb_info, (xmid, ymid), person_depth)
                             self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
-                            diststr = str(tuple(map(lambda x: round(x, 2), point3D)))
-                            cv2.putText(self.cv_image_rgb, diststr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 1.2, CamaraProcessing.COLOR_BLUE, 2)
+                            # SHOW 3DPOINT - ADDIMG
+                            # point3Dstr = str(tuple(map(lambda x: round(x, 2), point3D)))
+                            # cv2.putText(self.cv_image_rgb_processed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
 
             def detect_mask_violations(self):
                 def detect_and_predict_masks(self):
-                    frame = self.cv_image_rgb
+                    frame = self.cv_image_rgb_processed
                     (h, w) = frame.shape[:2]
                     blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300),
                         (104.0, 177.0, 123.0))
@@ -389,32 +383,35 @@ class CamaraProcessing:
                     return (locs, preds)
                 
                 (locs, preds) = detect_and_predict_masks(self)
-            
+
                 # loop over the detected face locations
+                self.masks = []
                 self.mask_correct = 0
                 self.mask_violations = 0
                 for (box, pred) in zip(locs, preds):
-                    # unpack the bounding box and predictions
                     (startX, startY, endX, endY) = box
                     (mask, withoutMask) = pred
 
-                    # determine the class label and color we'll use to draw
-                    # the bounding box and text
-                    label = "Mask" if mask > withoutMask else "No Mask"
-                    color = (0, 255, 0) if label == "Mask" else (0, 0, 255)
+                    usingMask = mask > withoutMask
+                    label = "Mask" if usingMask else "No Mask"
+                    color = CamaraProcessing.COLOR_GREEN if usingMask else CamaraProcessing.COLOR_RED
 
-                    if label == "Mask":
+                    if usingMask:
                         self.mask_correct = self.mask_correct + 1 
                     else: 
                         self.mask_violations = self.mask_violations + 1
-                    # include the probability in the label
+
+                    # Label - Include Probability
                     label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-                    # display the label and bounding box rectangle on the output
-                    # frame
-                    cv2.putText(self.cv_image_rgb, label, (startX, startY - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
-                    cv2.rectangle(self.cv_image_rgb, (startX, startY), (endX, endY), color, 2)
+                    centroid = (startX + 0.5 * (endX - startX), startY + 0.5 * (endY - startY));
+
+                    self.masks.append((centroid, usingMask, label))
+
+                    # SHOW MASKS RECT & PROBABILITY - ADDIMG
+                    if self.args["SHOW_FACES"]:
+                        cv2.putText(self.cv_image_rgb_processed, label, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
+                        cv2.rectangle(self.cv_image_rgb_processed, (startX, startY), (endX, endY), color, 2)
 
             # detect_mask_violations(self)
 
@@ -423,6 +420,21 @@ class CamaraProcessing:
                     return  math.sqrt(
                                 math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
                                     point1[2] - point2[2], 2))
+                
+                def get_optimal_font_scale(text, width):
+                    for scale in reversed(range(0, 60)):
+                        textSize = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=1)
+                        (new_width, new_height) = textSize[0]
+                        if (new_width <= width):
+                            return (scale/10, new_width, new_height)
+                    return (1,1)
+
+                def point_inside_rect(point, rect) :
+                    x, y, w, h = iperson.rect
+                    if point[0] > x and point[0] < x + w and point[1] > y and point[1] < y + h:
+                        return True
+                    else:
+                        return False
 
                 self.distance_violations = 0
                 distances = []
@@ -433,25 +445,29 @@ class CamaraProcessing:
                     for j, jperson in enumerate(self.persons):
                         if i != j:
                             distance = calculatedistance(iperson.point3D,jperson.point3D)
-                            distances[i].append(distance)
-                            distances[j].append(distance)
+                            if distance < float(1.0):
+                                self.distance_violations = self.distance_violations + 1
+                                iperson.distanceViolation = True
+                                jperson.distanceViolation = True
 
                 for i, iperson in enumerate(self.persons):
                     x, y, w, h = iperson.rect
-                    for idist in distances[i]:
-                        if idist < float(1.0):
-                            cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_RED, 2)
-                            iperson.drawed = True
-                            self.distance_violations = self.distance_violations + 1
-                            break
-                    if iperson.drawed == False:
-                        cv2.rectangle(self.cv_image_rgb, (x, y), (x + w, y + h), CamaraProcessing.COLOR_GREEN, 2)
+                    rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation elif CamaraProcessing.COLOR_GREEN
+                    # SHOW PERSON RECTS - ADDIMG
+                    cv2.rectangle(self.cv_image_rgb_processed, (x, y), (x + w, y + h), rectColor, 2)
+                    for mask in self.masks:
+                        (centroid, usingMask, label) = mask
+                        if point_inside_rect(centroid, iperson.rect):
+                            (textScale, textHeight) = get_optimal_font_scale(label, w - 10)
+                            # SHOW MASK LABEL - ADDIMG
+                            cv2.putText(self.cv_image_rgb_processed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLACK, 1)            
 
-                cv2.putText(self.cv_image_rgb, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
+                # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
+                # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
 
             social_distancing(self)
 
-            cv2.imshow("Frame", self.cv_image_rgb)
+            cv2.imshow("SEMS", self.cv_image_rgb_processed)
             cv2.waitKey(1)
             self.publish()
             
