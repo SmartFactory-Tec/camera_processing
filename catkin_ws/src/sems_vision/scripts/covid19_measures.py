@@ -21,7 +21,6 @@ import screeninfo
 import imutils
 import numpy as np
 import cv2
-import math
 import copy
 import sys
 sys.path.append(str(pathlib.Path(__file__).parent) + '/../include')
