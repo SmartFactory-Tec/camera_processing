@@ -44,18 +44,16 @@ def mapRectangle(srcShape, destShape, rect):
     rightDownCorner = (map(x + w, 0, srcWidth, 0, destWidth), map(y + h, 0, srcWidth, 0, destWidth))
     return (leftUpCorner[0], leftUpCorner[1], rightDownCorner[0] - leftUpCorner[0], rightDownCorner[1] - leftUpCorner[1])
 
-def transparentOverlay(src, overlay, pos=(0, 0)):
-    h, w, _ = overlay.shape  # Size of foreground
-    rows, cols, _ = src.shape  # Size of background Image
-    y, x = pos[0], pos[1]  # Position of foreground/overlay image
-    # loop over all pixels and apply the blending equation
-    for i in range(h):
-        for j in range(w):
-            if x + i >= rows or y + j >= cols:
-                continue
-            alpha = float(overlay[i][j][3] / 255.0)  # read the alpha channel
-            src[x + i][y + j] = alpha * overlay[i][j][:3] + (1 - alpha) * src[x + i][y + j]
-    return src
+def add_image(background, image, position):
+    y1, y2 = position[1], position[1] + image.shape[0]
+    x1, x2 = position[0], position[0] + image.shape[1]
+    alpha_s = image[:, :, 3] / 255.0
+    alpha_l = 1.0 - alpha_s
+
+    for c in range(0, 3):
+        background[y1:y2, x1:x2, c] = (alpha_s * image[:, :, c] +
+                                alpha_l * background[y1:y2, x1:x2, c])
+    return background
 
 def get_depth(rgbframe_, depthframe_, pixel):
     heightRGB, widthRGB = (rgbframe_.shape[0], rgbframe_.shape[1])
@@ -493,10 +491,12 @@ class CamaraProcessing:
                 
                 def add_logo(self):
                     padding = (50, 25)
-                    (height, width, _) = self.cv_image_rgb_drawed.shape
-                    self.cv_image_rgb_drawed = transparentOverlay(self.cv_image_rgb_drawed, self.logo_image, (width - self.logo_image.shape[1] - padding[0], padding[1]))
-                
-                #add_logo(self)
+                    (heightImg, widthImg, _) = self.cv_image_rgb_drawed.shape
+                    (heightLogo, widthLogo, _) = self.logo_image.shape
+                    position = (widthImg - widthLogo - padding[0], padding[1])
+                    return add_image(self.cv_image_rgb_drawed, self.logo_image, position)
+
+                add_logo(self)
         
             draw_over_frame(self)
 
