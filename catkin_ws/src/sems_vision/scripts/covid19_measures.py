@@ -17,6 +17,7 @@ from sensor_msgs.msg import CompressedImage, Image, PointCloud2, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Int16
 from std_msgs.msg import Float32MultiArray
+import screeninfo
 import numpy as np
 import cv2
 import math
@@ -28,7 +29,8 @@ ARGS= {
     "GPU_AVAILABLE": True,
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
-    "SHOW_FACES": True,
+    "SHOW_FACES": False,
+    "FULL_SCREEN": False,
 }
 
 def get_depth(rgbframe_, depthframe_, pixel):
@@ -156,6 +158,26 @@ def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
 
     return (depth * x, depth * y, depth)
 
+def calculatedistance(point1, point2):
+    return  math.sqrt(
+                math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
+                    point1[2] - point2[2], 2))
+
+def get_optimal_font_scale(text, width):
+    for scale in reversed(range(0, 60)):
+        textSize = cv2.getTextSize(text, fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=1)
+        (new_width, new_height) = textSize[0]
+        if (new_width <= width):
+            return (scale/10, new_height)
+    return (1,1)
+
+def point_inside_rect(point, rect) :
+    x, y, w, h = rect
+    if point[0] > x and point[0] < x + w and point[1] > y and point[1] < y + h:
+        return True
+    else:
+        return False
+
 class Person:
     def __init__(self, xCentroid, yCentroid, x, y, w, h, depth, point3D):
         self.depth = depth
@@ -280,8 +302,9 @@ class CamaraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
-        cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        if ARGS["FULL_SCREEN"]:
+            cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
+            cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         while not rospy.is_shutdown():
             if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
@@ -289,11 +312,6 @@ class CamaraProcessing:
             self.cv_image_rgb_processed = self.cv_image_rgb.copy()
 
             def detect_and_predict_people(self):
-                def calculatedistance(point1,point2):
-                    return  math.sqrt(
-                                math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
-                                    point1[2] - point2[2], 2))
-
                 height, width, channels = self.cv_image_rgb_processed.shape
                 blob = cv2.dnn.blobFromImage(self.cv_image_rgb_processed, 1 / 255.0, (320, 320), swapRB=True, crop=False)
                 self.peopleNet.setInput(blob)
@@ -409,33 +427,13 @@ class CamaraProcessing:
                     self.masks.append((centroid, usingMask, label))
 
                     # SHOW MASKS RECT & PROBABILITY - ADDIMG
-                    if self.args["SHOW_FACES"]:
+                    if ARGS["SHOW_FACES"]:
                         cv2.putText(self.cv_image_rgb_processed, label, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
                         cv2.rectangle(self.cv_image_rgb_processed, (startX, startY), (endX, endY), color, 2)
 
-            # detect_mask_violations(self)
+            detect_mask_violations(self)
 
             def social_distancing(self):
-                def calculatedistance(point1, point2):
-                    return  math.sqrt(
-                                math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
-                                    point1[2] - point2[2], 2))
-                
-                def get_optimal_font_scale(text, width):
-                    for scale in reversed(range(0, 60)):
-                        textSize = cv.getTextSize(text, fontFace=cv.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=1)
-                        (new_width, new_height) = textSize[0]
-                        if (new_width <= width):
-                            return (scale/10, new_width, new_height)
-                    return (1,1)
-
-                def point_inside_rect(point, rect) :
-                    x, y, w, h = iperson.rect
-                    if point[0] > x and point[0] < x + w and point[1] > y and point[1] < y + h:
-                        return True
-                    else:
-                        return False
-
                 self.distance_violations = 0
                 distances = []
                 for index, person in enumerate(self.persons):
@@ -450,9 +448,15 @@ class CamaraProcessing:
                                 iperson.distanceViolation = True
                                 jperson.distanceViolation = True
 
+                # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
+                # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
+
+            social_distancing(self)
+
+            def draw_over_frame(self):
                 for i, iperson in enumerate(self.persons):
                     x, y, w, h = iperson.rect
-                    rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation elif CamaraProcessing.COLOR_GREEN
+                    rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
                     # SHOW PERSON RECTS - ADDIMG
                     cv2.rectangle(self.cv_image_rgb_processed, (x, y), (x + w, y + h), rectColor, 2)
                     for mask in self.masks:
@@ -460,12 +464,14 @@ class CamaraProcessing:
                         if point_inside_rect(centroid, iperson.rect):
                             (textScale, textHeight) = get_optimal_font_scale(label, w - 10)
                             # SHOW MASK LABEL - ADDIMG
-                            cv2.putText(self.cv_image_rgb_processed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLACK, 1)            
-
-                # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
-                # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
-
-            social_distancing(self)
+                            cv2.putText(self.cv_image_rgb_processed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLUE, 2)
+        
+            draw_over_frame(self)
+        
+            if ARGS["FULL_SCREEN"] and len(screeninfo.get_monitors()) > 0:
+                screen = screeninfo.get_monitors()[0]
+                targetSize = (screen.width, screen.height)
+                self.cv_image_rgb_processed = cv2.resize(self.cv_image_rgb_processed, targetSize)
 
             cv2.imshow("SEMS", self.cv_image_rgb_processed)
             cv2.waitKey(1)
