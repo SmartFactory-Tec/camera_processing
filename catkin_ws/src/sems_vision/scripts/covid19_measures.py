@@ -21,7 +21,9 @@ import numpy as np
 import cv2
 import math
 import copy
+import sys
 
+FLT_EPSILON = sys.float_info.epsilon
 ARGS= {
     "GPU_AVAILABLE": True,
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
@@ -29,75 +31,140 @@ ARGS= {
 }
 print(ARGS)
 
-class Person:
-    def __init__(self, xCentroid, yCentroid, x, y, w, h, img_width, img_height, depthframe_):
-        self.point2D = (xCentroid, yCentroid)
-        self.point3D = (0, 0, 0)
-        self.x = x
-        self.y = y
-        self.depth = 0 
-        self.w = w
-        self.h = h
-        self.img_width = img_width
-        self.img_height = img_height
-        self.drawed = False
-        self.get_depth(depthframe_)
+def get_depth(rgbframe_, depthframe_, pixel):
+    heightRGB, widthRGB = (rgbframe_.shape[0], rgbframe_.shape[1])
+    heightDEPTH, widthDEPTH = (depthframe_.shape[0], depthframe_.shape[1])
     
-    def get_depth(self, depthframe_):
-        heightRGB, widthRGB = (self.img_height, self.img_width)
-        heightDEPTH, widthDEPTH = (depthframe_.shape[0], depthframe_.shape[1])
-        
-        def map(x, in_min, in_max, out_min, out_max):
-            return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
-        
-        x = map(self.point2D[0], 0, widthRGB, 0, widthRGB)
-        y = map(self.point2D[1], 0, widthDEPTH, 0, widthDEPTH)
+    def map(x, in_min, in_max, out_min, out_max):
+        return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
+    
+    x = map(pixel[0], 0, widthRGB, 0, widthRGB)
+    y = map(pixel[1], 0, widthDEPTH, 0, widthDEPTH)
 
-        def medianCalculation(x, y, width, height, depthframe_):
-            medianArray = []
-            requiredValidValues = 20
-            def spiral(medianArray, depthframe_, requiredValidValues, startX, startY, endX, endY, width, height):
-                if startX <  0 and startY < 0 and endX > width and endY > height:
+    def medianCalculation(x, y, width, height, depthframe_):
+        medianArray = []
+        requiredValidValues = 20
+        def spiral(medianArray, depthframe_, requiredValidValues, startX, startY, endX, endY, width, height):
+            if startX <  0 and startY < 0 and endX > width and endY > height:
+                return
+            for i in range(startX, endX + 1):
+                if i >= width:
+                    break
+                if startY >= 0 and math.isfinite(depthframe_[startY][i]):
+                    medianArray.append(depthframe_[startY][i])
+                if startY != endY and endY < height and math.isfinite(depthframe_[endY][i]):
+                    medianArray.append(depthframe_[endY][i])
+                if len(medianArray) > requiredValidValues:
                     return
-                for i in range(startX, endX + 1):
-                    if i >= width:
-                        break
-                    if startY >= 0 and math.isfinite(depthframe_[startY][i]):
-                        medianArray.append(depthframe_[startY][i])
-                    if startY != endY and endY < height and math.isfinite(depthframe_[endY][i]):
-                        medianArray.append(depthframe_[endY][i])
-                    if len(medianArray) > requiredValidValues:
-                        return
-                for i in range(startY + 1, endY):
-                    if i >= height:
-                        break
-                    if startX >= 0 and math.isfinite(depthframe_[i][startX]):
-                        medianArray.append(depthframe_[i][startX])
-                    if startX != endX and endX < width and math.isfinite(depthframe_[i][endX]):
-                        medianArray.append(depthframe_[i][endX])
-                    if len(medianArray) > requiredValidValues:
-                        return
-                # Check Next Spiral
-                spiral(medianArray, depthframe_, requiredValidValues, startX - 1, startY - 1, endX + 1, endY + 1, width, height)
-            
-            # Check Spirals around Centroid till requiredValidValues
-            spiral(medianArray, depthframe_, requiredValidValues, x, y, x, y, width, height)
-            if len(medianArray) == 0:
-                return float("NaN")
-            medianArray.sort()
-            print(medianArray)
-            return medianArray[len(medianArray)//2]
+            for i in range(startY + 1, endY):
+                if i >= height:
+                    break
+                if startX >= 0 and math.isfinite(depthframe_[i][startX]):
+                    medianArray.append(depthframe_[i][startX])
+                if startX != endX and endX < width and math.isfinite(depthframe_[i][endX]):
+                    medianArray.append(depthframe_[i][endX])
+                if len(medianArray) > requiredValidValues:
+                    return
+            # Check Next Spiral
+            spiral(medianArray, depthframe_, requiredValidValues, startX - 1, startY - 1, endX + 1, endY + 1, width, height)
         
-        self.depth = medianCalculation(x,y, widthDEPTH, heightDEPTH, depthframe_)
-        
-    def get_3DPoint():
-        pass
-        # arrayPosition = y*pcl_.row_step + x*pcl_.point_step
-        # arrayPosX = arrayPosition + pcl_.fields[0].offset # X has an offset of 0
-        # arrayPosY = arrayPosition + pcl_.fields[1].offset # Y has an offset of 4
-        # arrayPosZ = arrayPosition + pcl_.fields[2].offset # Z has an offset of 8
-        # self.point3D = (pcl_.data[arrayPosX], pcl_.data[arrayPosY], pcl_.data[arrayPosZ])
-        # print(heightRGB, widthRGB, heightPCL, widthPCL, self.point3D)
+        # Check Spirals around Centroid till requiredValidValues
+        spiral(medianArray, depthframe_, requiredValidValues, x, y, x, y, width, height)
+        if len(medianArray) == 0:
+            return float("NaN")
+        medianArray.sort()
+        print(medianArray)
+        return medianArray[len(medianArray)#2]
+    
+    return medianCalculation(x,y, widthDEPTH, heightDEPTH, depthframe_)
+
+def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
+    def CameraInfoToIntrinsics(cameraInfo):
+        intrinsics = {}
+        intrinsics["width"] = cameraInfo.width
+        intrinsics["height"] = cameraInfo.height
+        intrinsics["ppx"] = cameraInfo.K[2]
+        intrinsics["ppy"] = cameraInfo.K[5]
+        intrinsics["fx"] = cameraInfo.K[0]
+        intrinsics["fy"] = cameraInfo.K[4]
+        if cameraInfo.distortion_model == 'plumb_bob':
+            intrinsics["model"] = "RS2_DISTORTION_BROWN_CONRADY"
+        elif cameraInfo.distortion_model == 'equidistant':
+            intrinsics["model"] = "RS2_DISTORTION_KANNALA_BRANDT4"
+        intrinsics["coeffs"] = [i for i in cameraInfo.D]
+        return intrinsics
+    
+    intrinsics = CameraInfoToIntrinsics(cv_image_rgb_info)
+
+    if(intrinsics["model"] == "RS2_DISTORTION_MODIFIED_BROWN_CONRADY"): # Cannot deproject from a forward-distorted image
+        return
+
+    x = (pixel[0] - intrinsics["ppx"]) / intrinsics["fx"]
+    y = (pixel[1] - intrinsics["ppy"]) / intrinsics["fy"]
+
+    xo = x
+    yo = y
+
+    if (intrinsics["model"] == RS2_DISTORTION_INVERSE_BROWN_CONRADY):
+        # need to loop until convergence 
+        # 10 iterations determined empirically
+        for i in range(10):
+            r2 = float(x * x + y * y)
+            icdist = float(1) / float(1 + ((intrinsics["coeffs"][4] * r2 + intrinsics["coeffs"][1]) * r2 + intrinsics["coeffs"][0]) * r2)
+            xq = float(x / icdist)
+            yq = float(y / icdist)
+            delta_x = float(2 * intrinsics["coeffs"][2] * xq * yq + intrinsics["coeffs"][3] * (r2 + 2 * xq * xq))
+            delta_y = float(2 * intrinsics["coeffs"][3] * xq * yq + intrinsics["coeffs"][2] * (r2 + 2 * yq * yq))
+            x = (xo - delta_x) * icdist
+            y = (yo - delta_y) * icdist
+
+    if intrinsics["model"] == "RS2_DISTORTION_BROWN_CONRADY":
+        # need to loop until convergence 
+        # 10 iterations determined empirically
+        for i in range(10):
+            r2 = float(x * x + y * y)
+            icdist = float(1) / float(1 + ((intrinsics["coeffs"][4] * r2 + intrinsics["coeffs"][1]) * r2 + intrinsics["coeffs"][0]) * r2)
+            delta_x = float(2 * intrinsics["coeffs"][2] * x * y + intrinsics["coeffs"][3] * (r2 + 2 * x * x))
+            delta_y = float(2 * intrinsics["coeffs"][3] * x * y + intrinsics["coeffs"][2] * (r2 + 2 * y * y))
+            x = (xo - delta_x) * icdist
+            y = (yo - delta_y) * icdist
+
+    if intrinsics["model"] == "RS2_DISTORTION_KANNALA_BRANDT4":
+        rd = float(math.sqrt(x * x + y * y))
+        if rd < FLT_EPSILON:
+            rd = FLT_EPSILON
+
+        theta = float(rd)
+        theta2 = float(rd * rd)
+        for i in range(4):
+            f = float(theta * (1 + theta2 * (intrinsics["coeffs"][0] + theta2 * (intrinsics["coeffs"][1] + theta2 * (intrinsics["coeffs"][2] + theta2 * intrinsics["coeffs"][3])))) - rd)
+            if fabs(f) < FLT_EPSILON:
+                break
+            df = float(1 + theta2 * (3 * intrinsics["coeffs"][0] + theta2 * (5 * intrinsics["coeffs"][1] + theta2 * (7 * intrinsics["coeffs"][2] + 9 * theta2 * intrinsics["coeffs"][3]))))
+            theta -= f / df
+            theta2 = theta * theta
+        r = float(math.tan(theta))
+        x *= r / rd
+        y *= r / rd
+
+    if intrinsics["model"] == "RS2_DISTORTION_FTHETA":
+        float rd = math.sqrt(x * x + y * y)
+        if rd < FLT_EPSILON:
+            rd = FLT_EPSILON
+        float r = (float)(math.tan(intrinsics["coeffs"][0] * rd) / math.atan(2 * math.tan(intrinsics["coeffs"][0] / 2.0f)))
+        x *= r / rd
+        y *= r / rd
+
+    return (depth * x, depth * y, depth)
+
+class Person:
+    def __init__(self, xCentroid, yCentroid, x, y, w, h, depth, point3D):
+        self.depth = depth
+        self.point2D = (xCentroid, yCentroid)
+        self.point3D = point3D
+        self.rect = (x, y, w, h)
+        self.drawed = False
+
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
@@ -271,8 +338,10 @@ class CamaraProcessing:
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
-                            self.persons.append(Person(xmid, ymid, x, y, w, h, width, height, self.depth_image))
-                            diststr = str(self.persons[-1].depth)
+                            person_depth = get_depth(self.cv_image_rgb, self.depth_image, (xmid, ymid))
+                            point3D = deproject_pixel_to_point(self.cv_image_rgb_info, (xmid, ymid), person_depth)
+                            self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
+                            diststr = str(point3D)
                             cv2.putText(self.cv_image_rgb, diststr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
