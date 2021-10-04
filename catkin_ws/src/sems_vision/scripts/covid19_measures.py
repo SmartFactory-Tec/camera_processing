@@ -18,6 +18,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Int16
 from std_msgs.msg import Float32MultiArray
 import screeninfo
+import imutils
 import numpy as np
 import cv2
 import math
@@ -30,15 +31,36 @@ ARGS= {
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
     "SHOW_FACES": False,
-    "FULL_SCREEN": False,
 }
+
+def map(x, in_min, in_max, out_min, out_max):
+    return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
+
+def mapRectangle(srcShape, destShape, rect):
+    srcHeight, srcWidth = (srcShape[0], srcShape[1])
+    destHeight, destWidth = (destShape[0], destShape[1])
+    x, y, w, h = rect
+    leftUpCorner = (map(x, 0, srcWidth, 0, destWidth), map(y, 0, srcWidth, 0, destWidth))
+    rightDownCorner = (map(x + w, 0, srcWidth, 0, destWidth), map(y + h, 0, srcWidth, 0, destWidth))
+    return (leftUpCorner[0], leftUpCorner[1], rightDownCorner[0] - leftUpCorner[0], rightDownCorner[1] - leftUpCorner[1])
+
+def transparentOverlay(src, overlay, pos=(0, 0)):
+    h, w, _ = overlay.shape  # Size of foreground
+    rows, cols, _ = src.shape  # Size of background Image
+    y, x = pos[0], pos[1]  # Position of foreground/overlay image
+    # loop over all pixels and apply the blending equation
+    for i in range(h):
+        for j in range(w):
+            if x + i >= rows or y + j >= cols:
+                continue
+            alpha = float(overlay[i][j][3] / 255.0)  # read the alpha channel
+            src[x + i][y + j] = alpha * overlay[i][j][:3] + (1 - alpha) * src[x + i][y + j]
+    return src
 
 def get_depth(rgbframe_, depthframe_, pixel):
     heightRGB, widthRGB = (rgbframe_.shape[0], rgbframe_.shape[1])
     heightDEPTH, widthDEPTH = (depthframe_.shape[0], depthframe_.shape[1])
-    
-    def map(x, in_min, in_max, out_min, out_max):
-        return int((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min)
+
     
     x = map(pixel[0], 0, widthRGB, 0, widthRGB)
     y = map(pixel[1], 0, widthDEPTH, 0, widthDEPTH)
@@ -209,6 +231,7 @@ class CamaraProcessing:
         self.depth_image = []
         self.cv_image_rgb = []
         self.cv_image_rgb_processed = []
+        self.cv_image_rgb_drawed = []
         self.cv_image_rgb_info = CameraInfo()
         
         self.persons = []
@@ -216,6 +239,8 @@ class CamaraProcessing:
         self.distanceviolations = 0
         self.mask_correct = 0
         self.mask_violations = 0
+
+        self.logo_image = imutils.resize(cv2.imread(str(pathlib.Path(__file__).parent) + "/../images/roborregos_logo.png", -1), width=180)
         
         # Load Models
         print("[INFO] Loading models...")
@@ -302,14 +327,13 @@ class CamaraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
-        if ARGS["FULL_SCREEN"]:
-            cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
-            cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         while not rospy.is_shutdown():
             if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
 
-            self.cv_image_rgb_processed = self.cv_image_rgb.copy()
+            self.cv_image_rgb_processed = imutils.resize(self.cv_image_rgb, width=500)
 
             def detect_and_predict_people(self):
                 height, width, channels = self.cv_image_rgb_processed.shape
@@ -454,26 +478,29 @@ class CamaraProcessing:
             social_distancing(self)
 
             def draw_over_frame(self):
+                self.cv_image_rgb_drawed = self.cv_image_rgb.copy()
                 for i, iperson in enumerate(self.persons):
-                    x, y, w, h = iperson.rect
+                    x, y, w, h = mapRectangle(self.cv_image_rgb_processed.shape, self.cv_image_rgb_drawed.shape, iperson.rect)
                     rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
                     # SHOW PERSON RECTS - ADDIMG
-                    cv2.rectangle(self.cv_image_rgb_processed, (x, y), (x + w, y + h), rectColor, 2)
+                    cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
                     for mask in self.masks:
                         (centroid, usingMask, label) = mask
                         if point_inside_rect(centroid, iperson.rect):
                             (textScale, textHeight) = get_optimal_font_scale(label, w - 10)
                             # SHOW MASK LABEL - ADDIMG
-                            cv2.putText(self.cv_image_rgb_processed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLUE, 2)
+                            cv2.putText(self.cv_image_rgb_drawed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, CamaraProcessing.COLOR_BLUE, 2)
+                
+                def add_logo(self):
+                    padding = (50, 25)
+                    (height, width, _) = self.cv_image_rgb_drawed.shape
+                    self.cv_image_rgb_drawed = transparentOverlay(self.cv_image_rgb_drawed, self.logo_image, (width - self.logo_image.shape[1] - padding[0], padding[1]))
+                
+                #add_logo(self)
         
             draw_over_frame(self)
-        
-            if ARGS["FULL_SCREEN"] and len(screeninfo.get_monitors()) > 0:
-                screen = screeninfo.get_monitors()[0]
-                targetSize = (screen.width, screen.height)
-                self.cv_image_rgb_processed = cv2.resize(self.cv_image_rgb_processed, targetSize)
 
-            cv2.imshow("SEMS", self.cv_image_rgb_processed)
+            cv2.imshow("SEMS", self.cv_image_rgb_drawed)
             cv2.waitKey(1)
             self.publish()
             
