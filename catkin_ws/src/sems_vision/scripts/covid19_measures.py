@@ -183,9 +183,9 @@ def calculatedistance(point1, point2):
                 math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
                     point1[2] - point2[2], 2))
 
-def get_optimal_font_scale(text, width):
+def get_optimal_font_scale(text, width, font, thickness):
     for scale in reversed(range(0, 60)):
-        textSize = cv2.getTextSize(text, fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=scale/10, thickness=2)
+        textSize = cv2.getTextSize(text, fontFace=font, fontScale=scale/10, thickness=thickness)
         (new_width, new_height) = textSize[0]
         if (new_width <= width):
             return (scale/10, new_height)
@@ -239,7 +239,7 @@ class CamaraProcessing:
         self.mask_violations = 0
 
         self.logo_image = imutils.resize(cv2.imread(str(pathlib.Path(__file__).parent) + "/../images/roborregos_logo.png", -1), width=180)
-        
+
         # Load Models
         print("[INFO] Loading models...")
         def loadPersonsModel(self):
@@ -330,7 +330,8 @@ class CamaraProcessing:
         while not rospy.is_shutdown():
             if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
-
+            
+            self.cv_image_rgb_drawed = self.cv_image_rgb.copy()
             self.cv_image_rgb_processed = imutils.resize(self.cv_image_rgb, width=500)
 
             def detect_and_predict_people(self):
@@ -365,7 +366,7 @@ class CamaraProcessing:
                 self.persons = []
                 for i in range(len(boxes)):
                     if i in indexes:
-                        x, y, w, h = boxes[i]
+                        x, y, w, h = mapRectangle(self.cv_image_rgb_processed.shape, self.cv_image_rgb_drawed.shape, boxes[i])
                         label = str(CamaraProcessing.CLASSES[class_ids[i]])
                         if label == 'person':
                             xmid = int(x + w/2)
@@ -375,15 +376,15 @@ class CamaraProcessing:
                             self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
                             # SHOW 3DPOINT - ADDIMG
                             # point3Dstr = str(tuple(map(lambda x: round(x, 2), point3D)))
-                            # cv2.putText(self.cv_image_rgb_processed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
+                            # cv2.putText(self.cv_image_rgb_drawed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
 
             def detect_mask_violations(self):
                 def detect_and_predict_masks(self):
-                    frame = self.cv_image_rgb_processed
+                    frame = self.cv_image_rgb_drawed
                     (h, w) = frame.shape[:2]
-                    blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300),
+                    blob = cv2.dnn.blobFromImage(frame, 1.0, (900 , 900),
                         (104.0, 177.0, 123.0))
 
                     # Obtain face detections
@@ -406,6 +407,8 @@ class CamaraProcessing:
 
                             # Preprocess Image
                             face = frame[startY:endY, startX:endX]
+                            if len(face) == 0:
+                                continue
                             face = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
                             face = cv2.resize(face, (224, 224))
                             face = img_to_array(face)
@@ -413,7 +416,8 @@ class CamaraProcessing:
 
                             # Add the face and bounding boxes to their respective list
                             faces.append(face)
-                            locs.append((startX, startY, endX, endY))
+                            box = (startX, startY, endX - startX, endY - startY)
+                            locs.append(box)
 
                     if len(faces) > 0:
                         faces = np.array(faces, dtype="float32")
@@ -429,7 +433,7 @@ class CamaraProcessing:
                 self.mask_correct = 0
                 self.mask_violations = 0
                 for (box, pred) in zip(locs, preds):
-                    (startX, startY, endX, endY) = box
+                    (startX, startY, width, height) = box
                     (mask, withoutMask) = pred
 
                     usingMask = mask > withoutMask
@@ -444,14 +448,13 @@ class CamaraProcessing:
                     # Label - Include Probability
                     label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
 
-                    centroid = (startX + 0.5 * (endX - startX), startY + 0.5 * (endY - startY));
+                    centroid = (startX + 0.5 * width, startY + 0.5 * height)
 
                     self.masks.append((centroid, usingMask, label))
 
                     # SHOW MASKS RECT & PROBABILITY - ADDIMG
                     if ARGS["SHOW_FACES"]:
-                        cv2.putText(self.cv_image_rgb_processed, label, (startX, startY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 2)
-                        cv2.rectangle(self.cv_image_rgb_processed, (startX, startY), (endX, endY), color, 2)
+                        cv2.rectangle(self.cv_image_rgb_drawed, (startX, startY), (startX + width, startY + height), color, 2)
 
             detect_mask_violations(self)
 
@@ -476,9 +479,8 @@ class CamaraProcessing:
             social_distancing(self)
 
             def draw_over_frame(self):
-                self.cv_image_rgb_drawed = self.cv_image_rgb.copy()
                 for i, iperson in enumerate(self.persons):
-                    x, y, w, h = mapRectangle(self.cv_image_rgb_processed.shape, self.cv_image_rgb_drawed.shape, iperson.rect)
+                    x, y, w, h = iperson.rect
                     rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
                     # SHOW PERSON RECTS - ADDIMG
                     cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
@@ -486,10 +488,10 @@ class CamaraProcessing:
                         (centroid, usingMask, label) = mask
                         labelColor = CamaraProcessing.COLOR_RED if not usingMask else CamaraProcessing.COLOR_GREEN
                         if point_inside_rect(centroid, iperson.rect):
-                            (textScale, textHeight) = get_optimal_font_scale(label, w - 10)
+                            (textScale, textHeight) = get_optimal_font_scale(label, w - 10, cv2.FONT_HERSHEY_PLAIN, 3)
                             # SHOW MASK LABEL - ADDIMG
-                            cv2.putText(self.cv_image_rgb_drawed, label, (x + 5, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, labelColor, 2)
-                
+                            cv2.putText(self.cv_image_rgb_drawed, label, (x, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, labelColor, 3)
+
                 def add_logo(self):
                     padding = (50, 25)
                     (heightImg, widthImg, _) = self.cv_image_rgb_drawed.shape
