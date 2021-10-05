@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # USAGE
-# python covid19_measures.py
+# python3 covid19_measures.py
 
-# import Dependencies
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
@@ -32,6 +31,8 @@ ARGS= {
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
     "SHOW_FACES": False,
+    "SHOW_3DPOINT": False,
+    "SHOW_DISTANCE_VIOLATIONS_COUNTER": False,
 }
 
 class Person:
@@ -211,8 +212,9 @@ class CamaraProcessing:
                             point3D = deproject_pixel_to_point(self.cv_image_rgb_info, (xmid, ymid), person_depth)
                             self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
                             # SHOW 3DPOINT - ADDIMG
-                            # point3Dstr = str(tuple(map(lambda x: round(x, 2), point3D)))
-                            # cv2.putText(self.cv_image_rgb_drawed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
+                            if ARGS["SHOW_3DPOINT"]:
+                                point3Dstr = str(tuple(map(lambda x: round(x, 2), point3D)))
+                                cv2.putText(self.cv_image_rgb_drawed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
             
             detect_and_predict_people(self)
 
@@ -310,7 +312,8 @@ class CamaraProcessing:
                                 jperson.distanceViolation = True
 
                 # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
-                # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
+                if ARGS["SHOW_DISTANCE_VIOLATIONS_COUNTER"]:
+                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
 
             social_distancing(self)
 
@@ -342,8 +345,7 @@ class CamaraProcessing:
             cv2.imshow("SEMS", self.cv_image_rgb_drawed)
             cv2.waitKey(1)
             self.publish()
-            
-            # Update FPS counter.
+
             self.fps.update()
 
 def main():

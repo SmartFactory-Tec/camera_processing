@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-# import Dependencies
 import math
 import cv2
 
@@ -27,10 +26,13 @@ def add_image(background, image, position):
     return background
 
 def get_depth(rgbframe_, depthframe_, pixel):
+    '''
+        Given pixel coordinates in an image, the actual image and its depth frame, compute the corresponding depth.
+    '''
     heightRGB, widthRGB = (rgbframe_.shape[0], rgbframe_.shape[1])
     heightDEPTH, widthDEPTH = (depthframe_.shape[0], depthframe_.shape[1])
 
-    
+    # Map RGB pixel to depth píxel.
     x = map(pixel[0], 0, widthRGB, 0, widthRGB)
     y = map(pixel[1], 0, widthDEPTH, 0, widthDEPTH)
 
@@ -40,6 +42,7 @@ def get_depth(rgbframe_, depthframe_, pixel):
         def spiral(medianArray, depthframe_, requiredValidValues, startX, startY, endX, endY, width, height):
             if startX <  0 and startY < 0 and endX > width and endY > height:
                 return
+            # Check first and last row of the square spiral.
             for i in range(startX, endX + 1):
                 if i >= width:
                     break
@@ -49,6 +52,7 @@ def get_depth(rgbframe_, depthframe_, pixel):
                     medianArray.append(depthframe_[endY][i])
                 if len(medianArray) > requiredValidValues:
                     return
+            # Check first and last column of the square spiral.
             for i in range(startY + 1, endY):
                 if i >= height:
                     break
@@ -58,19 +62,27 @@ def get_depth(rgbframe_, depthframe_, pixel):
                     medianArray.append(depthframe_[i][endX])
                 if len(medianArray) > requiredValidValues:
                     return
-            # Check Next Spiral
+            # Go to the next outer square spiral of the depth pixel.
             spiral(medianArray, depthframe_, requiredValidValues, startX - 1, startY - 1, endX + 1, endY + 1, width, height)
         
-        # Check Spirals around Centroid till requiredValidValues
+        # Check square spirals around the depth pixel till requiredValidValues found.
         spiral(medianArray, depthframe_, requiredValidValues, x, y, x, y, width, height)
         if len(medianArray) == 0:
             return float("NaN")
+
+        # Calculate Median
         medianArray.sort()
         return medianArray[len(medianArray) // 2]
     
+    # Get the median of the values around the depth pixel to avoid incorrect readings.
     return medianCalculation(x, y, widthDEPTH, heightDEPTH, depthframe_)
 
 def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
+    '''
+        Given pixel coordinates and depth in an image with no distortion or inverse distortion coefficients, 
+        compute the corresponding point in 3D space relative to the same camera
+        Reference: https://github.com/IntelRealSense/librealsense/blob/e9f05c55f88f6876633bd59fd1cb3848da64b699/src/rs.cpp#L3505
+    '''
     def CameraInfoToIntrinsics(cameraInfo):
         intrinsics = {}
         intrinsics["width"] = cameraInfo.width
@@ -86,6 +98,7 @@ def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
         intrinsics["coeffs"] = [i for i in cameraInfo.D]
         return intrinsics
     
+    # Parse ROS CameraInfo msg to intrinsics dictionary.
     intrinsics = CameraInfoToIntrinsics(cv_image_rgb_info)
 
     if(intrinsics["model"] == "RS2_DISTORTION_MODIFIED_BROWN_CONRADY"): # Cannot deproject from a forward-distorted image
@@ -150,7 +163,7 @@ def deproject_pixel_to_point(cv_image_rgb_info, pixel, depth):
     return (depth * x, depth * y, depth)
 
 def calculatedistance(point1, point2):
-    return  math.sqrt(
+    return math.sqrt(
                 math.pow(point1[0] - point2[0], 2) + math.pow(point1[1] - point2[1], 2) + math.pow(
                     point1[2] - point2[2], 2))
 
