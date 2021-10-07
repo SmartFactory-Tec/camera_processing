@@ -17,6 +17,7 @@ from sensor_msgs.msg import CompressedImage, Image, PointCloud2, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Int16
 from std_msgs.msg import Float32MultiArray
+import dlib
 import screeninfo
 import imutils
 import numpy as np
@@ -32,15 +33,19 @@ ARGS= {
     "MODELS_PATH": str(pathlib.Path(__file__).parent) + "/../../../../models",
     "CONFIDENCE": 0.5,
     "SHOW_FACES": False,
+    "SKIP_FRAMES": 5,
 }
 
 class Person:
-    def __init__(self, xCentroid, yCentroid, x, y, w, h, depth, point3D):
-        self.depth = depth
+    def __init__(self, xCentroid, yCentroid, x, y, w, h, tracker):
         self.point2D = (xCentroid, yCentroid)
-        self.point3D = point3D
+        self.point3D = None
         self.rect = (x, y, w, h)
         self.distanceViolation = False
+        self.tracker = tracker
+        self.usingMask = None
+        self.maskPred = None
+        self.depth = None
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
@@ -68,8 +73,9 @@ class CamaraProcessing:
         self.cv_image_rgb_drawed = []
         self.cv_image_rgb_info = CameraInfo()
         
+        self.frameCounter = 0
+        
         self.persons = []
-        self.masks = []
         self.distanceviolations = 0
         self.mask_correct = 0
         self.mask_violations = 0
@@ -81,7 +87,7 @@ class CamaraProcessing:
         def loadPersonsModel(self):
             weightsPath = ARGS["MODELS_PATH"] + "/people/yolov4.weights"
             cfgPath = ARGS["MODELS_PATH"] + "/people/yolov4.cfg"
-            self.peopleNet = cv2.dnn.readNet(weightsPath, cfgPath)
+            self.peopleNet = cv2.dnn.readNetFromDarknet(cfgPath, weightsPath)
             if ARGS["GPU_AVAILABLE"]:
                 # set CUDA as the preferable backend and target
                 self.peopleNet.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
@@ -170,6 +176,9 @@ class CamaraProcessing:
             self.cv_image_rgb_drawed = self.cv_image_rgb.copy()
             self.cv_image_rgb_processed = imutils.resize(self.cv_image_rgb, width=500)
 
+            # Convert the frame from BGR to RGB for dlib.
+            cv_image_dlib = cv2.cvtColor(self.cv_image_rgb_processed, cv2.COLOR_BGR2RGB)
+
             def detect_and_predict_people(self):
                 height, width, channels = self.cv_image_rgb_processed.shape
                 blob = cv2.dnn.blobFromImage(self.cv_image_rgb_processed, 1 / 255.0, (320, 320), swapRB=True, crop=False)
@@ -207,14 +216,29 @@ class CamaraProcessing:
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
-                            person_depth = get_depth(self.cv_image_rgb_processed, self.depth_image, (xmid, ymid))
-                            point3D = deproject_pixel_to_point(self.cv_image_rgb_info, (xmid, ymid), person_depth)
-                            self.persons.append(Person(xmid, ymid, x, y, w, h, person_depth, point3D))
-                            # SHOW 3DPOINT - ADDIMG
-                            # point3Dstr = str(tuple(map(lambda x: round(x, 2), point3D)))
-                            # cv2.putText(self.cv_image_rgb_drawed, point3Dstr, (x, ymid), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 3)
+                            endX = x + w
+                            endY = y + h
+
+                            # construct a dlib rectangle object from the bounding
+                            # box coordinates and then start the dlib correlation
+                            # tracker`
+                            tracker = dlib.correlation_tracker()
+                            rect = dlib.rectangle(int(x), int(y), int(endX), int(endY))
+                            tracker.start_track(cv_image_dlib, rect)
+
+                            self.persons.append(Person(xmid, ymid, x, y, w, h, tracker))
             
-            detect_and_predict_people(self)
+            def track_people(self):
+                for person in self.persons:
+                    person.tracker.update(cv_image_dlib)
+                    pos = person.tracker.get_position()
+
+                    startX = int(pos.left())
+                    startY = int(pos.top())
+                    endX = int(pos.right())
+                    endY = int(pos.bottom())
+
+                    self.rect = (startX, startY, endX - startX, endY - startY)
 
             def detect_mask_violations(self):
                 def detect_and_predict_masks(self):
@@ -265,39 +289,34 @@ class CamaraProcessing:
                 (locs, preds) = detect_and_predict_masks(self)
 
                 # loop over the detected face locations
-                self.masks = []
                 self.mask_correct = 0
                 self.mask_violations = 0
                 for (box, pred) in zip(locs, preds):
                     (startX, startY, width, height) = box
-                    (mask, withoutMask) = pred
-
-                    usingMask = mask > withoutMask
-                    label = "Mask" if usingMask else "No Mask"
-                    color = CamaraProcessing.COLOR_GREEN if usingMask else CamaraProcessing.COLOR_RED
-
-                    if usingMask:
-                        self.mask_correct = self.mask_correct + 1 
-                    else: 
-                        self.mask_violations = self.mask_violations + 1
-
-                    # Label - Include Probability
-                    label = "{}: {:.2f}%".format(label, max(mask, withoutMask) * 100)
-
                     centroid = (startX + 0.5 * width, startY + 0.5 * height)
 
-                    self.masks.append((centroid, usingMask, label))
+                    (mask, withoutMask) = pred
+                    usingMask = mask > withoutMask
+
+                    for i, iperson in enumerate(self.persons):
+                        if iperson.usingMask == None and point_inside_rect(centroid, iperson.rect):
+                            iperson.usingMask = usingMask
+                            iperson.maskPred = max(mask, withoutMask) * 100
+                            if usingMask:
+                                self.mask_correct = self.mask_correct + 1 
+                            else: 
+                                self.mask_violations = self.mask_violations + 1
 
                     # SHOW MASKS RECT & PROBABILITY - ADDIMG
                     if ARGS["SHOW_FACES"]:
                         cv2.rectangle(self.cv_image_rgb_drawed, (startX, startY), (startX + width, startY + height), color, 2)
 
-            detect_mask_violations(self)
-
             def social_distancing(self):
                 self.distance_violations = 0
                 distances = []
                 for index, person in enumerate(self.persons):
+                    person.depth = get_depth(self.cv_image_rgb_processed, self.depth_image, person.point2D)
+                    person.point3D = deproject_pixel_to_point(self.cv_image_rgb_info, person.point2D, person.depth)
                     distances.append([])
 
                 for i, iperson in enumerate(self.persons):
@@ -312,21 +331,22 @@ class CamaraProcessing:
                 # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
                 # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
 
-            social_distancing(self)
-
             def draw_over_frame(self):
                 for i, iperson in enumerate(self.persons):
                     x, y, w, h = iperson.rect
                     rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
+
                     # SHOW PERSON RECTS - ADDIMG
                     cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
-                    for mask in self.masks:
-                        (centroid, usingMask, label) = mask
-                        labelColor = CamaraProcessing.COLOR_RED if not usingMask else CamaraProcessing.COLOR_GREEN
-                        if point_inside_rect(centroid, iperson.rect):
-                            (textScale, textHeight) = get_optimal_font_scale(label, w - 10, cv2.FONT_HERSHEY_PLAIN, 3)
-                            # SHOW MASK LABEL - ADDIMG
-                            cv2.putText(self.cv_image_rgb_drawed, label, (x, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, labelColor, 3)
+                    
+                    if iperson.usingMask != None:
+                        maskLabel = "Mask" if iperson.usingMask else "No Mask"
+                        maskLabel = "{}: {:.2f}%".format(maskLabel, iperson.maskPred)
+                        maskLabelColor = CamaraProcessing.COLOR_RED if not iperson.usingMask else CamaraProcessing.COLOR_GREEN
+                        (textScale, textHeight) = get_optimal_font_scale(maskLabel, w - 10, cv2.FONT_HERSHEY_PLAIN, 3)
+
+                        # SHOW MASK LABEL - ADDIMG
+                        cv2.putText(self.cv_image_rgb_drawed, maskLabel, (x, y + h - textHeight), cv2.FONT_HERSHEY_PLAIN, textScale, maskLabelColor, 3)
 
                 def add_logo(self):
                     padding = (50, 25)
@@ -336,14 +356,22 @@ class CamaraProcessing:
                     return add_image(self.cv_image_rgb_drawed, self.logo_image, position)
 
                 add_logo(self)
-        
+
+            if self.frameCounter == 0:
+                detect_and_predict_people(self)
+                detect_mask_violations(self)
+            else:
+                track_people(self)
+
+            social_distancing(self)
             draw_over_frame(self)
 
             cv2.imshow("SEMS", self.cv_image_rgb_drawed)
             cv2.waitKey(1)
             self.publish()
-            
-            # Update FPS counter.
+
+            self.frameCounter = (self.frameCounter + 1) % ARGS["SKIP_FRAMES"]
+
             self.fps.update()
 
 def main():
