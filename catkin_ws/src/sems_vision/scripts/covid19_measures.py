@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # USAGE
-# python covid19_measures.py
+# python3 covid19_measures.py
 
-# import Dependencies
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
@@ -34,6 +33,7 @@ ARGS= {
     "CONFIDENCE": 0.5,
     "SHOW_FACES": False,
     "SKIP_FRAMES": 5,
+    "SHOW_DISTANCE_VIOLATIONS_COUNTER": False,
 }
 
 class Person:
@@ -227,7 +227,7 @@ class CamaraProcessing:
                             tracker.start_track(cv_image_dlib, rect)
 
                             self.persons.append(Person(xmid, ymid, x, y, w, h, tracker))
-            
+
             def track_people(self):
                 for person in self.persons:
                     person.tracker.update(cv_image_dlib)
@@ -329,7 +329,8 @@ class CamaraProcessing:
                                 jperson.distanceViolation = True
 
                 # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
-                # cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
+                if ARGS["SHOW_DISTANCE_VIOLATIONS_COUNTER"]:
+                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
 
             def draw_over_frame(self):
                 for i, iperson in enumerate(self.persons):
