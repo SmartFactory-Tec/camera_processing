@@ -27,7 +27,7 @@ import socketio
 import socket
 
 ARGS= {
-	"CAMARAIDS": [7],
+	"CAMARAIDS": [8],
 	"BACK_ENDPOINT": ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0],
 	"NGROK_AVAILABLE": True,
 	"GPU_AVAILABLE": True,
