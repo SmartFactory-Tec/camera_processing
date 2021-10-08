@@ -226,20 +226,21 @@ class CamaraProcessing:
 			self.peopleCounter += 1
 
 			def determineDirection(self, to):
+				linePadding = 30
 				if self.v_orientation:
 					x = [c[0] for c in to.centroids]
 					
-					if x[len(x) - 1] < self.W // 2 and x[0] > self.W // 2:
+					if x[len(x) - 1] < (self.W // 2 + linePadding) and x[0] > (self.W // 2 - linePadding):
 						self.totalInDir += 1
 
-					elif x[len(x) - 1] > self.W // 2 and x[0] < self.W // 2:
+					elif x[len(x) - 1] > (self.W // 2 - linePadding) and x[0] < (self.W // 2 + linePadding):
 						self.totalOutDir += 1
 				else:
 					y = [c[1] for c in to.centroids]
 
-					if y[len(y) - 1] < self.H // 2 and y[0] > self.H // 2:
+					if y[len(y) - 1] < (self.H // 2 + linePadding) and y[0] > (self.W // 2 - linePadding):
 						self.totalInDir += 1	
-					elif y[len(y) - 1] > self.H // 2 and y[0] < self.H // 2:
+					elif y[len(y) - 1] > (self.H // 2 - linePadding) and y[0] < (self.W // 2 + linePadding):
 						self.totalOutDir += 1
 
 			determineDirection(self, tmpTO)
