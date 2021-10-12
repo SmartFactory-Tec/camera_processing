@@ -237,9 +237,9 @@ class CamaraProcessing:
 				else:
 					y = [c[1] for c in to.centroids]
 
-					if y[len(y) - 1] < (self.H // 2) and y[0] > (self.W // 2):
+					if y[len(y) - 1] < (self.H // 2) and y[0] > (self.H // 2):
 						self.totalInDir += 1	
-					elif y[len(y) - 1] > (self.H // 2) and y[0] < (self.W // 2):
+					elif y[len(y) - 1] > (self.H // 2) and y[0] < (self.H // 2):
 						self.totalOutDir += 1
 
 			determineDirection(self, tmpTO)
@@ -299,8 +299,9 @@ class CamaraProcessing:
 	def callFps(self):	
 		if self.fps != None:
 			self.fps.stop()
-			print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
-			print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
+			if self.args["VERBOSE"]:
+				print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
+				print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
 			self.fpsValue = self.fps.fps()
 
 		self.fps = FPS().start()
@@ -422,7 +423,8 @@ class CamaraProcessing:
 				start = time.time()
 				detections = self.net.forward(self.layer_names)
 				end = time.time()
-				print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
+				if self.args["VERBOSE"]:
+					print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
 
 				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, self.args["CONFIDENCE"])
 
