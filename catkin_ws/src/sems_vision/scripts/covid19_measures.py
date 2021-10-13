@@ -105,10 +105,10 @@ class CameraProcessing:
     with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
         CLASSES = [line.strip() for line in f.readlines()]
 
-    def __init__(self, frameRGB, outputFrameRGB, frameDepth):
-        self.frameRGB = frameRGB
-        self.outputFrameRGB = outputFrameRGB
-        self.frameDepth = frameDepth
+    def __init__(self, frameRGB, outputFrameRGB, rgbFrameShape, frameDepth, depthFrameShape):
+        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8).reshape(rgbFrameShape)
+        self.outputFrameRGB = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(rgbFrameShape)
+        self.frameDepth = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(depthFrameShape)
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
         if ARGS["ENABLE_PUBLISHERS"]:
             self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
@@ -424,7 +424,7 @@ def main():
     sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1], lock=False)
     readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
     readProcessRef.start()
-    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, sharedFrameDepth))
+    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
     processingProcessRef.start()
     
     outputFrame = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(rgbFrameShape)
