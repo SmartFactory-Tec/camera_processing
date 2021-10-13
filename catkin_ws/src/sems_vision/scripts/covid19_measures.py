@@ -66,8 +66,10 @@ class CameraInit:
 class CameraRead:
     def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape):
         self.bridge = CvBridge()
-        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8).reshape(frameRGBShape)
-        self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8).reshape(frameDepthShape)
+        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
+        self.frameRGB = self.frameRGB.reshape(frameRGBShape)
+        self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8)
+        self.frameDepth = self.frameDepth.reshape(frameDepthShape)
         self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
         rospy.spin()
@@ -106,9 +108,13 @@ class CameraProcessing:
         CLASSES = [line.strip() for line in f.readlines()]
 
     def __init__(self, frameRGB, outputFrameRGB, rgbFrameShape, frameDepth, depthFrameShape):
-        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8).reshape(rgbFrameShape)
-        self.outputFrameRGB = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(rgbFrameShape)
-        self.frameDepth = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(depthFrameShape)
+        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
+        self.frameRGB = self.frameRGB.reshape(rgbFrameShape)
+        self.outputFrameRGB = np.frombuffer(outputFrameRGB, dtype=np.uint8)
+        self.outputFrameRGB = self.outputFrameRGB.reshape(rgbFrameShape)
+        self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8)
+        self.frameDepth = self.frameDepth.reshape(depthFrameShape)
+
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
         if ARGS["ENABLE_PUBLISHERS"]:
             self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
@@ -116,8 +122,8 @@ class CameraProcessing:
             self.publisherDistanceViolations = rospy.Publisher("/zed2_/distance_violations", Int16, queue_size = 10)
             self.publisherMaskCorrect = rospy.Publisher("/zed2_/masks_correct", Int16, queue_size = 10)
             self.publisherMaskViolations = rospy.Publisher("/zed2_/masks_violations", Int16, queue_size = 10)
-        self.depth_image = []
-        self.cv_image_rgb = []
+        self.depth_image = np.zeros(depthFrameShape, dtype=np.uint8)
+        self.cv_image_rgb = np.zeros(rgbFrameShape, dtype=np.uint8)
         self.cv_image_rgb_processed = []
         self.cv_image_rgb_drawed = []
         self.cv_image_rgb_info = CameraInfo()
@@ -427,11 +433,12 @@ def main():
     processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
     processingProcessRef.start()
     
-    outputFrame = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(rgbFrameShape)
+    outputFrame_ = np.frombuffer(outputFrameRGB, dtype=np.uint8)
+    outputFrame_ = outputFrame_.reshape(rgbFrameShape)
     cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     while True:
-        cv2.imshow("SEMS", outputFrame)
+        cv2.imshow("SEMS", outputFrame_)
         cv2.waitKey(1)
 
 
