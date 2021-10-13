@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # USAGE
 # python3 covid19_measures.py
-
+# TODO find a workaround to use rospy with multiprocessing
 from multiprocessing import Process, Array, Value
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
@@ -64,7 +64,7 @@ class CameraInit:
             print(e)
 
 class CameraRead:
-    def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape):
+    def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape, rospy):
         self.bridge = CvBridge()
         self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
         self.frameRGB = self.frameRGB.reshape(frameRGBShape)
@@ -72,16 +72,19 @@ class CameraRead:
         self.frameDepth = self.frameDepth.reshape(frameDepthShape)
         self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
-        rospy.spin()
+        while not rospy.is_shutdown():
+	        pass
 
     def callback_depth(self, data):
         try:
+            print("Depth Received")
             self.frameDepth[:] = self.bridge.imgmsg_to_cv2(data, "32FC1")
         except CvBridgeError as e:
             print(e)
 
     def callback_rgb(self, data):
         try:
+            print("RGB Received")
             self.frameRGB[:] = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError as e:
             print(e)
@@ -107,13 +110,14 @@ class CameraProcessing:
     with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
         CLASSES = [line.strip() for line in f.readlines()]
 
-    def __init__(self, frameRGB, outputFrameRGB, rgbFrameShape, frameDepth, depthFrameShape):
+    def __init__(self, frameRGB, outputFrameRGB, rgbFrameShape, frameDepth, depthFrameShape, rospy):
         self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
         self.frameRGB = self.frameRGB.reshape(rgbFrameShape)
         self.outputFrameRGB = np.frombuffer(outputFrameRGB, dtype=np.uint8)
         self.outputFrameRGB = self.outputFrameRGB.reshape(rgbFrameShape)
         self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8)
         self.frameDepth = self.frameDepth.reshape(depthFrameShape)
+        self.rospy = rospy
 
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
         if ARGS["ENABLE_PUBLISHERS"]:
@@ -200,7 +204,7 @@ class CameraProcessing:
         if not ARGS["ENABLE_PUBLISHERS"]:
             return
         img = CompressedImage()
-        img.header.stamp = rospy.Time.now()
+        img.header.stamp = self.rospy.Time.now()
         img.format = "jpeg"
         img.data = np.array(cv2.imencode('.jpg', self.cv_image_rgb_processed)[1]).tostring()
         
@@ -212,7 +216,7 @@ class CameraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while not self.rospy.is_shutdown():
             if len(self.frameRGB) == 0 or len(self.frameDepth) == 0:
                 continue
             
@@ -428,20 +432,21 @@ def main():
     sharedFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
     outputFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
     sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1], lock=False)
-    readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
+    readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape, rospy))
     readProcessRef.start()
-    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
-    processingProcessRef.start()
+    #processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape, rospy))
+    #processingProcessRef.start()
     
-    outputFrame_ = np.frombuffer(outputFrameRGB, dtype=np.uint8)
+    outputFrame_ = np.frombuffer(sharedFrameRGB, dtype=np.uint8)
     outputFrame_ = outputFrame_.reshape(rgbFrameShape)
     cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    while True:
-        cv2.imshow("SEMS", outputFrame_)
-        cv2.waitKey(1)
-
-
+    try:
+        while not rospy.is_shutdown():
+            cv2.imshow("SEMS", outputFrame_)
+            cv2.waitKey(1)
+    except KeyboardInterrupt:
+        pass
 
 if __name__ == '__main__':
     main()
