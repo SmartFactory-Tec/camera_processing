@@ -24,6 +24,7 @@ import numpy as np
 import cv2
 import copy
 import sys
+import ctypes
 sys.path.append(str(pathlib.Path(__file__).parent) + '/../include')
 from sems_vision_utils import *
 
@@ -41,11 +42,11 @@ ARGS= {
 class CameraInit:
     def __init__(self):
         self.bridge = CvBridge()
-        self.cv_image_rgb = None
-        self.depth_image = None
+        self.cv_image_rgb = []
+        self.depth_image = []
         self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
-        while self.cv_image_rgb == None or self.depth_image == None:
+        while len(self.cv_image_rgb) == 0 or len(self.depth_image) == 0:
             pass
 
     def callback_depth(self, data):
@@ -94,7 +95,7 @@ class Person:
         self.maskPred = None
         self.depth = None
 
-class CamaraProcessing:
+class CameraProcessing:
     COLOR_RED = (0, 0, 255)
     COLOR_GREEN = (0, 255, 0)
     COLOR_BLUE = (255, 0, 0)
@@ -251,7 +252,7 @@ class CamaraProcessing:
                 for i in range(len(boxes)):
                     if i in indexes:
                         x, y, w, h = mapRectangle(self.cv_image_rgb_processed.shape, self.cv_image_rgb_drawed.shape, boxes[i])
-                        label = str(CamaraProcessing.CLASSES[class_ids[i]])
+                        label = str(CameraProcessing.CLASSES[class_ids[i]])
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
@@ -369,12 +370,12 @@ class CamaraProcessing:
 
                 # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
                 if ARGS["SHOW_DISTANCE_VIOLATIONS_COUNTER"]:
-                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
+                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CameraProcessing.COLOR_BLUE, 2)
 
             def draw_over_frame(self):
                 for i, iperson in enumerate(self.persons):
                     x, y, w, h = iperson.rect
-                    rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
+                    rectColor = CameraProcessing.COLOR_RED if iperson.distanceViolation else CameraProcessing.COLOR_GREEN
 
                     # SHOW PERSON RECTS - ADDIMG
                     cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
@@ -382,7 +383,7 @@ class CamaraProcessing:
                     if iperson.usingMask != None:
                         maskLabel = "Mask" if iperson.usingMask else "No Mask"
                         maskLabel = "{}: {:.2f}%".format(maskLabel, iperson.maskPred)
-                        maskLabelColor = CamaraProcessing.COLOR_RED if not iperson.usingMask else CamaraProcessing.COLOR_GREEN
+                        maskLabelColor = CameraProcessing.COLOR_RED if not iperson.usingMask else CameraProcessing.COLOR_GREEN
                         (textScale, textHeight) = get_optimal_font_scale(maskLabel, w - 10, cv2.FONT_HERSHEY_PLAIN, 3)
 
                         # SHOW MASK LABEL - ADDIMG
@@ -420,10 +421,10 @@ def main():
     rgbFrameShape = initCamera.cv_image_rgb.shape
     depthFrameShape = initCamera.depth_image.shape
     sharedFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
-    sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1] * depthFrameShape[2], lock=False)
-    readProcessRef = Process(target=CamaraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
+    sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1], lock=False)
+    readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
     readProcessRef.start()
-    processingProcessRef = Process(target=CamaraProcessing, args=(sharedFrameRGB, sharedFrameDepth)
+    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, sharedFrameDepth))
     processingProcessRef.start()
     rospy.spin()
 
