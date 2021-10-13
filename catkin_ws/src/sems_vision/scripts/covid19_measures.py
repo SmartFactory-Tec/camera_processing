@@ -206,8 +206,6 @@ class CameraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
-        cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
-        cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         while not rospy.is_shutdown():
             if len(self.frameRGB) == 0 or len(self.frameDepth) == 0:
                 continue
@@ -429,7 +427,9 @@ def main():
     processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, sharedFrameDepth))
     processingProcessRef.start()
     
-    outputFrame = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(frameRGBShape)
+    outputFrame = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(rgbFrameShape)
+    cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
+    cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     while True:
         cv2.imshow("SEMS", outputFrame)
         cv2.waitKey(1)
