@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # USAGE
 # python3 covid19_measures.py
-# TODO find a workaround to use rospy with multiprocessing
-from multiprocessing import Process, Array, Value
+
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import img_to_array
 from tensorflow.keras.models import load_model
@@ -24,7 +23,6 @@ import numpy as np
 import cv2
 import copy
 import sys
-import ctypes
 sys.path.append(str(pathlib.Path(__file__).parent) + '/../include')
 from sems_vision_utils import *
 
@@ -36,58 +34,7 @@ ARGS= {
     "SHOW_FACES": False,
     "SKIP_FRAMES": 5,
     "SHOW_DISTANCE_VIOLATIONS_COUNTER": False,
-    "ENABLE_PUBLISHERS": False,
 }
-
-class CameraInit:
-    def __init__(self):
-        self.bridge = CvBridge()
-        self.cv_image_rgb = []
-        self.depth_image = []
-        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
-        self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
-        while len(self.cv_image_rgb) == 0 or len(self.depth_image) == 0:
-            pass
-
-    def callback_depth(self, data):
-        try:
-            self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
-            self.depth_sub.unregister()
-        except CvBridgeError as e:
-            print(e)
-
-    def callback_rgb(self, data):
-        try:
-            self.cv_image_rgb = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            self.rgb_sub.unregister()
-        except CvBridgeError as e:
-            print(e)
-
-class CameraRead:
-    def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape, rospy):
-        self.bridge = CvBridge()
-        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
-        self.frameRGB = self.frameRGB.reshape(frameRGBShape)
-        self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8)
-        self.frameDepth = self.frameDepth.reshape(frameDepthShape)
-        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
-        self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
-        while not rospy.is_shutdown():
-	        pass
-
-    def callback_depth(self, data):
-        try:
-            print("Depth Received")
-            self.frameDepth[:] = self.bridge.imgmsg_to_cv2(data, "32FC1")
-        except CvBridgeError as e:
-            print(e)
-
-    def callback_rgb(self, data):
-        try:
-            print("RGB Received")
-            self.frameRGB[:] = self.bridge.imgmsg_to_cv2(data, "bgr8")
-        except CvBridgeError as e:
-            print(e)
 
 class Person:
     def __init__(self, xCentroid, yCentroid, x, y, w, h, tracker):
@@ -100,7 +47,7 @@ class Person:
         self.maskPred = None
         self.depth = None
 
-class CameraProcessing:
+class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
     COLOR_GREEN = (0, 255, 0)
     COLOR_BLUE = (255, 0, 0)
@@ -110,24 +57,18 @@ class CameraProcessing:
     with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
         CLASSES = [line.strip() for line in f.readlines()]
 
-    def __init__(self, frameRGB, outputFrameRGB, rgbFrameShape, frameDepth, depthFrameShape, rospy):
-        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8)
-        self.frameRGB = self.frameRGB.reshape(rgbFrameShape)
-        self.outputFrameRGB = np.frombuffer(outputFrameRGB, dtype=np.uint8)
-        self.outputFrameRGB = self.outputFrameRGB.reshape(rgbFrameShape)
-        self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8)
-        self.frameDepth = self.frameDepth.reshape(depthFrameShape)
-        self.rospy = rospy
-
+    def __init__(self):
+        self.bridge = CvBridge()
+        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
+        self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
-        if ARGS["ENABLE_PUBLISHERS"]:
-            self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
-            self.publisherPeople = rospy.Publisher("/zed2_/people_count", Int16, queue_size = 10)
-            self.publisherDistanceViolations = rospy.Publisher("/zed2_/distance_violations", Int16, queue_size = 10)
-            self.publisherMaskCorrect = rospy.Publisher("/zed2_/masks_correct", Int16, queue_size = 10)
-            self.publisherMaskViolations = rospy.Publisher("/zed2_/masks_violations", Int16, queue_size = 10)
-        self.depth_image = np.zeros(depthFrameShape, dtype=np.uint8)
-        self.cv_image_rgb = np.zeros(rgbFrameShape, dtype=np.uint8)
+        self.publisherImage = rospy.Publisher("/zed2_/image/compressed", CompressedImage, queue_size = 1)
+        self.publisherPeople = rospy.Publisher("/zed2_/people_count", Int16, queue_size = 10)
+        self.publisherDistanceViolations = rospy.Publisher("/zed2_/distance_violations", Int16, queue_size = 10)
+        self.publisherMaskCorrect = rospy.Publisher("/zed2_/masks_correct", Int16, queue_size = 10)
+        self.publisherMaskViolations = rospy.Publisher("/zed2_/masks_violations", Int16, queue_size = 10)
+        self.depth_image = []
+        self.cv_image_rgb = []
         self.cv_image_rgb_processed = []
         self.cv_image_rgb_drawed = []
         self.cv_image_rgb_info = CameraInfo()
@@ -196,15 +137,25 @@ class CameraProcessing:
         callFpsThread = threading.Timer(2.0, self.callFps, args=())
         callFpsThread.start()
 
+    def callback_depth(self, data):
+        try:
+            self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
+        except CvBridgeError as e:
+            print(e)
+
+    def callback_rgb(self, data):
+        try:
+            self.cv_image_rgb = self.bridge.imgmsg_to_cv2(data, "bgr8")
+        except CvBridgeError as e:
+            print(e)
+
     def callback_rgb_info(self, data):
         self.cv_image_rgb_info = data
         self.rgb_sub_info.unregister()
 
     def publish(self):
-        if not ARGS["ENABLE_PUBLISHERS"]:
-            return
         img = CompressedImage()
-        img.header.stamp = self.rospy.Time.now()
+        img.header.stamp = rospy.Time.now()
         img.format = "jpeg"
         img.data = np.array(cv2.imencode('.jpg', self.cv_image_rgb_processed)[1]).tostring()
         
@@ -216,12 +167,12 @@ class CameraProcessing:
         self.publisherMaskCorrect.publish(self.mask_correct)
 
     def run(self):
-        while not self.rospy.is_shutdown():
-            if len(self.frameRGB) == 0 or len(self.frameDepth) == 0:
+        cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        while not rospy.is_shutdown():
+            if len(self.depth_image) == 0 or len(self.cv_image_rgb) == 0:
                 continue
             
-            self.cv_image_rgb[:] = self.frameRGB
-            self.depth_image[:] = self.frameDepth
             self.cv_image_rgb_drawed = self.cv_image_rgb.copy()
             self.cv_image_rgb_processed = imutils.resize(self.cv_image_rgb, width=500)
 
@@ -261,7 +212,7 @@ class CameraProcessing:
                 for i in range(len(boxes)):
                     if i in indexes:
                         x, y, w, h = mapRectangle(self.cv_image_rgb_processed.shape, self.cv_image_rgb_drawed.shape, boxes[i])
-                        label = str(CameraProcessing.CLASSES[class_ids[i]])
+                        label = str(CamaraProcessing.CLASSES[class_ids[i]])
                         if label == 'person':
                             xmid = int(x + w/2)
                             ymid = int(y + h/2)
@@ -379,12 +330,12 @@ class CameraProcessing:
 
                 # SHOW DISTANCE VIOLATIONS COUNTER - ADDIMG
                 if ARGS["SHOW_DISTANCE_VIOLATIONS_COUNTER"]:
-                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CameraProcessing.COLOR_BLUE, 2)
+                    cv2.putText(self.cv_image_rgb_processed, 'Distance Violations:' + str(self.distance_violations), (5,25), cv2.FONT_HERSHEY_PLAIN, 2, CamaraProcessing.COLOR_BLUE, 2)
 
             def draw_over_frame(self):
                 for i, iperson in enumerate(self.persons):
                     x, y, w, h = iperson.rect
-                    rectColor = CameraProcessing.COLOR_RED if iperson.distanceViolation else CameraProcessing.COLOR_GREEN
+                    rectColor = CamaraProcessing.COLOR_RED if iperson.distanceViolation else CamaraProcessing.COLOR_GREEN
 
                     # SHOW PERSON RECTS - ADDIMG
                     cv2.rectangle(self.cv_image_rgb_drawed, (x, y), (x + w, y + h), rectColor, 2)
@@ -392,7 +343,7 @@ class CameraProcessing:
                     if iperson.usingMask != None:
                         maskLabel = "Mask" if iperson.usingMask else "No Mask"
                         maskLabel = "{}: {:.2f}%".format(maskLabel, iperson.maskPred)
-                        maskLabelColor = CameraProcessing.COLOR_RED if not iperson.usingMask else CameraProcessing.COLOR_GREEN
+                        maskLabelColor = CamaraProcessing.COLOR_RED if not iperson.usingMask else CamaraProcessing.COLOR_GREEN
                         (textScale, textHeight) = get_optimal_font_scale(maskLabel, w - 10, cv2.FONT_HERSHEY_PLAIN, 3)
 
                         # SHOW MASK LABEL - ADDIMG
@@ -416,8 +367,8 @@ class CameraProcessing:
             social_distancing(self)
             draw_over_frame(self)
 
-            self.outputFrameRGB[:] = self.cv_image_rgb_drawed
-
+            cv2.imshow("SEMS", self.cv_image_rgb_drawed)
+            cv2.waitKey(1)
             self.publish()
 
             self.frameCounter = (self.frameCounter + 1) % ARGS["SKIP_FRAMES"]
@@ -426,27 +377,7 @@ class CameraProcessing:
 
 def main():
     rospy.init_node('Covid19Measures', anonymous=True)
-    initCamera = CameraInit()
-    rgbFrameShape = initCamera.cv_image_rgb.shape
-    depthFrameShape = initCamera.depth_image.shape
-    sharedFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
-    outputFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
-    sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1], lock=False)
-    readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape, rospy))
-    readProcessRef.start()
-    #processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape, rospy))
-    #processingProcessRef.start()
-    
-    outputFrame_ = np.frombuffer(sharedFrameRGB, dtype=np.uint8)
-    outputFrame_ = outputFrame_.reshape(rgbFrameShape)
-    cv2.namedWindow("SEMS", cv2.WND_PROP_FULLSCREEN)
-    cv2.setWindowProperty("SEMS", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    try:
-        while not rospy.is_shutdown():
-            cv2.imshow("SEMS", outputFrame_)
-            cv2.waitKey(1)
-    except KeyboardInterrupt:
-        pass
+    CamaraProcessing()
 
 if __name__ == '__main__':
     main()
