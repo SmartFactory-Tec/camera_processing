@@ -39,15 +39,15 @@ ARGS= {
 }
 
 class CameraInit:
-	def __init__(self):
+    def __init__(self):
         self.bridge = CvBridge()
-		self.cv_image_rgb = None
-		self.depth_image = None
-		self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
+        self.cv_image_rgb = None
+        self.depth_image = None
+        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
         while self.cv_image_rgb == None or self.depth_image == None:
             pass
-	
+
     def callback_depth(self, data):
         try:
             self.depth_image = self.bridge.imgmsg_to_cv2(data, "32FC1")
@@ -63,14 +63,14 @@ class CameraInit:
             print(e)
 
 class CameraRead:
-	def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape):
+    def __init__(self, frameRGB, frameRGBShape, frameDepth, frameDepthShape):
         self.bridge = CvBridge()
-		self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8).reshape(frameRGBShape)
+        self.frameRGB = np.frombuffer(frameRGB, dtype=np.uint8).reshape(frameRGBShape)
         self.frameDepth = np.frombuffer(frameDepth, dtype=np.uint8).reshape(frameDepthShape)
-		self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
+        self.depth_sub = rospy.Subscriber("/zed2/zed_node/depth/depth_registered", Image, self.callback_depth)
         self.rgb_sub = rospy.Subscriber("/zed2/zed_node/rgb/image_rect_color", Image, self.callback_rgb)
         rospy.spin()
-	
+
     def callback_depth(self, data):
         try:
             self.frameDepth[:] = self.bridge.imgmsg_to_cv2(data, "32FC1")
