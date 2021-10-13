@@ -1,10 +1,11 @@
 # import the necessary packages
 from scipy.spatial import distance as dist
 from collections import OrderedDict
+import types
 import numpy as np
 
 class CentroidTracker:
-	def __init__(self, maxDisappeared=50, maxDistance=50):
+	def __init__(self, maxDisappeared=50, maxDistance=50, removeAction=None):
 		# initialize the next unique object ID along with two ordered
 		# dictionaries used to keep track of mapping a given object
 		# ID to its centroid and number of consecutive frames it has
@@ -26,6 +27,9 @@ class CentroidTracker:
 		# distance we'll start to mark the object as "disappeared"
 		self.maxDistance = maxDistance
 
+		# Custom removeAction
+		self.removeAction = removeAction
+
 	def register(self, centroid, rect):
 		# when registering an object we use the next available object
 		# ID to store the centroid
@@ -40,6 +44,8 @@ class CentroidTracker:
 		del self.objects["centroid"][objectID]
 		del self.objects["rect"][objectID]
 		del self.disappeared[objectID]
+		if isinstance(self.removeAction, types.FunctionType):
+			self.removeAction(objectID)
 
 	def update(self, rects):
 		# check to see if the list of input bounding box rectangles

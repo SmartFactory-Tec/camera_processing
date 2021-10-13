@@ -14,7 +14,7 @@ __pycache__/
 
 # env
 .env
-people-counter/ 
+sems-env/ 
 
 # files
 /app.py
@@ -25,6 +25,5 @@ people-counter/
 #yolo model
 *.weights
 
-#catkin_ws
 catkin_ws/build/
-catkin_ws/devel
+catkin_ws/devel/

@@ -89,6 +89,7 @@ class SocketIOProcess:
 				data["out_direction"],
 				data["counter"],
 				data["social_distancing_v"],
+				data["in_frame_time_avg"],
 				data["fps"],
 			))
 	
@@ -205,12 +206,47 @@ class CamaraProcessing:
 		# Non maxima supression threshold
 		self.NMS_THRESH = 0.3
 
-		# Instantiate our centroid tracker, then initialize a list to store
-		# each of our dlib correlation trackers, followed by a dictionary to
+		# People in Frame - Time Average
+		self.peopleTimeAvg = 0
+		self.peopleCounter = 0
+
+		# Instantiate our centroid tracker, initialize a list to store
+		# each of our dlib correlation trackers and a dictionary to
 		# map each unique object ID to a TrackableObject
-		self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50)
 		self.trackers = []
 		self.trackableObjects = {}
+
+		# Instantiate custom removeAction for centroid tracker.
+		def removeAction(objectID):
+			def getAvg(prev_avg, x, n):
+				return (prev_avg * n + x) / (n + 1)
+
+			tmpTO = self.trackableObjects[objectID]
+			self.peopleTimeAvg = getAvg(self.peopleTimeAvg, time.time() - tmpTO.startTime, self.peopleCounter)
+			self.peopleCounter += 1
+
+			def determineDirection(self, to):
+				if self.v_orientation:
+					x = [c[0] for c in to.centroids]
+					
+					if x[len(x) - 1] < (self.W // 2) and x[0] > (self.W // 2):
+						self.totalInDir += 1
+
+					elif x[len(x) - 1] > (self.W // 2) and x[0] < (self.W // 2):
+						self.totalOutDir += 1
+				else:
+					y = [c[1] for c in to.centroids]
+
+					if y[len(y) - 1] < (self.H // 2) and y[0] > (self.H // 2):
+						self.totalInDir += 1	
+					elif y[len(y) - 1] > (self.H // 2) and y[0] < (self.H // 2):
+						self.totalOutDir += 1
+
+			determineDirection(self, tmpTO)
+			self.overpassPostCondition =  True
+			del self.trackableObjects[objectID]
+
+		self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50, removeAction=removeAction)
 
 		# initialize the total number of frames processed thus far, along
 		# with the total number of objects that have moved either up or down
@@ -228,6 +264,7 @@ class CamaraProcessing:
 			"out_direction": self.totalOutDir,
 			"counter": 0,
 			"social_distancing_v": 0,
+			"in_frame_time_avg": 0,
 			"fps": 0,
 		}
 
@@ -237,6 +274,7 @@ class CamaraProcessing:
 		callFpsThread.start()
 
 		# Start data post Thread
+		self.overpassPostCondition = False
 		callPostThread = threading.Thread(target=self.callPost, args=(), daemon=True)
 		callPostThread.start()
 
@@ -254,14 +292,16 @@ class CamaraProcessing:
 		callPostThread.start()
 		
 		# Sending Camara Data
-		if self.data["counter"] != 0:
+		if self.data["counter"] != 0 or self.overpassPostCondition:
+			self.overpassPostCondition = False
 			self.socketManager.sendCamaraData(self.id, self.data)
 
 	def callFps(self):	
 		if self.fps != None:
 			self.fps.stop()
-			print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
-			print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
+			if self.args["VERBOSE"]:
+				print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
+				print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
 			self.fpsValue = self.fps.fps()
 
 		self.fps = FPS().start()
@@ -383,7 +423,8 @@ class CamaraProcessing:
 				start = time.time()
 				detections = self.net.forward(self.layer_names)
 				end = time.time()
-				print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
+				if self.args["VERBOSE"]:
+					print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
 
 				boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, self.args["CONFIDENCE"])
 
@@ -480,57 +521,9 @@ class CamaraProcessing:
 				if to is None:
 					to = TrackableObject(objectID, centroid)
 
-				# otherwise, there is a trackable object so we can utilize it
-				# to determine direction
+				# otherwise, append new centroid
 				else:
-					if self.v_orientation:
-						# the difference between the x-coordinate of the current
-						# centroid and the mean of previous centroids will tell
-						# us in which direction the object is moving (negative for
-						# 'left' and positive for 'right')
-						x = [c[0] for c in to.centroids]
-						direction = centroid[0] - np.mean(x)
-						to.centroids.append(centroid)
-
-						# check to see if the object has been counted or not
-						if not to.counted:
-							# if the direction is negative (indicating the object
-							# is moving left) AND the centroid is above the center
-							# line, count the object
-							if direction < 5 and centroid[0] < self.W // 2:
-								self.totalInDir += 1
-								to.counted = True
-
-							# if the direction is positive (indicating the object
-							# is moving right) AND the centroid is below the
-							# center line, count the object
-							elif direction > 5 and centroid[0] > self.W // 2:
-								self.totalOutDir += 1
-								to.counted = True
-					else:
-						# the difference between the y-coordinate of the current
-						# centroid and the mean of previous centroids will tell
-						# us in which direction the object is moving (negative for
-						# 'up' and positive for 'down')
-						y = [c[1] for c in to.centroids]
-						direction = centroid[1] - np.mean(y)
-						to.centroids.append(centroid)
-
-						# check to see if the object has been counted or not
-						if not to.counted:
-							# if the direction is negative (indicating the object
-							# is moving up) AND the centroid is above the center
-							# line, count the object
-							if direction < 0 and centroid[0] < self.H // 2:
-								self.totalInDir += 1
-								to.counted = True
-
-							# if the direction is positive (indicating the object
-							# is moving down) AND the centroid is below the
-							# center line, count the object
-							elif direction > 0 and centroid[0] > self.H // 2:
-								self.totalOutDir += 1
-								to.counted = True
+					to.centroids.append(centroid)
 
 				# store the trackable object in our dictionary
 				self.trackableObjects[objectID] = to
@@ -548,7 +541,7 @@ class CamaraProcessing:
 
 				cv2.rectangle(frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
 				cv2.putText(frame, text, (x_start + 5, y_start + 10),
-					cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 2)
+					cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 1)
 				cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
 				cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
@@ -557,6 +550,7 @@ class CamaraProcessing:
 				"out_direction": self.totalOutDir,
 				"counter": len(objects.items()),
 				"social_distancing_v": math.ceil(self.totalDistanceViolations/2),
+				"in_frame_time_avg": round(self.peopleTimeAvg, 3),
 				"fps": int(self.fpsValue),
 			}
 
