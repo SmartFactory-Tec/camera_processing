@@ -105,8 +105,9 @@ class CameraProcessing:
     with open(ARGS["MODELS_PATH"] + '/people/coco.names', 'r') as f:
         CLASSES = [line.strip() for line in f.readlines()]
 
-    def __init__(self, frameRGB, frameDepth):
+    def __init__(self, frameRGB, outputFrameRGB, frameDepth):
         self.frameRGB = frameRGB
+        self.outputFrameRGB = outputFrameRGB
         self.frameDepth = frameDepth
         self.rgb_sub_info = rospy.Subscriber("/zed2/zed_node/rgb/camera_info", CameraInfo, self.callback_rgb_info)
         if ARGS["ENABLE_PUBLISHERS"]:
@@ -407,8 +408,8 @@ class CameraProcessing:
             social_distancing(self)
             draw_over_frame(self)
 
-            cv2.imshow("SEMS", self.cv_image_rgb_drawed)
-            cv2.waitKey(1)
+            self.outputFrameRGB[:] = self.cv_image_rgb_drawed
+
             self.publish()
 
             self.frameCounter = (self.frameCounter + 1) % ARGS["SKIP_FRAMES"]
@@ -421,12 +422,19 @@ def main():
     rgbFrameShape = initCamera.cv_image_rgb.shape
     depthFrameShape = initCamera.depth_image.shape
     sharedFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
+    outputFrameRGB = Array(ctypes.c_uint8, rgbFrameShape[0] * rgbFrameShape[1] * rgbFrameShape[2], lock=False)
     sharedFrameDepth = Array(ctypes.c_uint8, depthFrameShape[0] * depthFrameShape[1], lock=False)
     readProcessRef = Process(target=CameraRead, args=(sharedFrameRGB, rgbFrameShape, sharedFrameDepth, depthFrameShape))
     readProcessRef.start()
-    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, sharedFrameDepth))
+    processingProcessRef = Process(target=CameraProcessing, args=(sharedFrameRGB, outputFrameRGB, sharedFrameDepth))
     processingProcessRef.start()
-    rospy.spin()
+    
+    outputFrame = np.frombuffer(outputFrameRGB, dtype=np.uint8).reshape(frameRGBShape)
+    while True:
+        cv2.imshow("SEMS", outputFrame)
+        cv2.waitKey(1)
+
+
 
 if __name__ == '__main__':
     main()
