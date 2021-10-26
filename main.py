@@ -31,6 +31,7 @@ ARGS= {
 	"BACK_ENDPOINT": ["http://sems.back.ngrok.io/", "http://localhost:3001/"][0],
 	"NGROK_AVAILABLE": True,
 	"GPU_AVAILABLE": True,
+	"FORWARD_CAMERA": False,
 	"VERBOSE": False,
 	"CONFIDENCE": 0.3,
 	"SKIP_FRAMES": 25,
@@ -91,14 +92,16 @@ class SocketIOProcess:
 				data["social_distancing_v"],
 				data["fps"],
 			))
-	
+
 	def setCamaraURL(self, id):
 		if self.sioConnected:
-			if self.args["NGROK_AVAILABLE"]:
+			if self.args["NGROK_AVAILABLE"] and self.args["FORWARD_CAMERA"]:
 				endpoint = 'http://sems.ngrok.io/camara/'
-			else:	
+			elif self.args["FORWARD_CAMERA"]:	
 				endpoint = 'http://' + socket.getfqdn() + ':8080/camara/'
-			
+			else:
+				endpoint = ''
+
 			self.sio.emit('updateCamara', data=(
 				self.camarasInfo[id]['id'], 
 				endpoint + str(id)
@@ -602,7 +605,10 @@ def showFrame(id):
 	outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
 	outputFrame = outputFrame.reshape(frameShapes[id])
 	while True:
-		ret, buffer = cv2.imencode('.jpg', outputFrame)
+		if self.args["FORWARD_CAMERA"]:
+			ret, buffer = cv2.imencode('.jpg', outputFrame)
+		else:
+			ret, buffer = cv2.imencode('.jpg', np.zeros(frameShapes[id], np.uint8))
 		frame_ready = buffer.tobytes()
 		yield (b'--frame\r\n'
 						b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
