@@ -13,7 +13,7 @@ pyimagesearch/__pycache__/
 
 # env
 .env
-people-counter/ 
+sems-env/ 
 
 # files
 /app.py
