@@ -599,7 +599,7 @@ def showFrame(id):
 	outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
 	outputFrame = outputFrame.reshape(frameShapes[id])
 	while True:
-		if self.args["FORWARD_CAMERA"]:
+		if ARGS["FORWARD_CAMERA"]:
 			ret, buffer = cv2.imencode('.jpg', outputFrame)
 		else:
 			ret, buffer = cv2.imencode('.jpg', np.zeros(frameShapes[id], np.uint8))
