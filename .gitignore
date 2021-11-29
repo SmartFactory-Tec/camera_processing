@@ -28,4 +28,4 @@ sems-env/
 catkin_ws/build/
 catkin_ws/devel/
 
-node_modules/
+node_modules/*

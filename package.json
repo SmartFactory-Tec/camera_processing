@@ -1,0 +1,22 @@
+{
+  "name": "sems-vision",
+  "version": "1.0.0",
+  "description": "Roborregos-Sems-Vision",
+  "main": "run.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RoBorregos/sems-vision.git"
+  },
+  "author": "RoBorregos",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RoBorregos/sems-vision/issues"
+  },
+  "homepage": "https://github.com/RoBorregos/sems-vision#readme",
+  "dependencies": {
+    "tree-kill": "^1.2.2"
+  }
+}
