@@ -1,6 +1,6 @@
 # Vision algorithm - SEMS
 
-This repository aim to run a script (main.py) to process n videos/streams.
+This repository aim to run a script ([main.py](main.py)) to process n videos/streams.
 - Algorithms implemented:
   - People Counter
   - People Tracker
@@ -8,7 +8,7 @@ This repository aim to run a script (main.py) to process n videos/streams.
 - Uses Flask to publish the image post-processed into a web-page to localhost:8080. 
 - Communicates directly with SEMS backend to request the source of the videos/streams and to publish all vision data calculated.
 
-It also aims to run a script using ros (roslaunch sems_vision covid19_measures.py) to process the video stream of a zed2 camera.
+It also aims to run a script using ros (roslaunch sems_vision [covid19_measures.py](catkin_ws/src/sems_vision/scripts/covid19_measures.py)) to process the video stream of a zed2 camera.
 - Algorithms implemented:
   - Mask Usage
   - 3D Distance Violation
