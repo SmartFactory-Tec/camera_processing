@@ -8,6 +8,11 @@ This repository aim to run a script (main.py) to process n videos/streams.
 - Uses Flask to publish the image post-processed into a web-page to localhost:8080. 
 - Communicates directly with SEMS backend to request the source of the videos/streams and to publish all vision data calculated.
 
+It also aims to run a script using ros (roslaunch sems_vision covid19_measures.py) to process the video stream of a zed2 camera.
+- Algorithms implemented:
+  - Mask Usage
+  - 3D Distance Violation
+
 The code is tested using Ubuntu 18.
 
 ## System Requirements
@@ -67,79 +72,3 @@ Requirements:
 Run main.py
 
 Open localhost:8080, all camaras should be displayed overthere.
-
-# DEPRECATED
-## Usage original script
-Run people_counter.py script, giving the protxt, caffemodel, input video and output destination as arguments.
-```bash
-python people_counter.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4 --output output/output_01.avi
-```
-Then, you should see a window displaying the labeled video and an output in console similar to this
-
-```bash
-[INFO] loading model...
-[INFO] opening video file...
-[INFO] elapsed time: 20.95
-[INFO] approx. FPS: 61.25
-```
-
-## Usage script v1.0
-
-Run people_counter_v1.py script, giving the protxt, caffemodel, input video and output destination as arguments.
-```bash
-python people_counter_v1.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4 --output output/output_01.avi
-```
-Then, you should see a window displaying the labeled video and an output in console similar to this
-
-```bash
-[INFO] loading model...
-[INFO] opening video file...
-[INFO] elapsed time: 20.95
-[INFO] approx. FPS: 61.25
-```
-
-## Usage script v2.0
-
-Run people_counter_v2.py script, giving the protxt, caffemodel, input video/stream.
-```bash
-python people_counter_v2.py --prototxt mobilenet_ssd/MobileNetSSD_deploy.prototxt --model mobilenet_ssd/MobileNetSSD_deploy.caffemodel --input videos/peoplewalking.mp4
-```
-Then, you should open localhost:8080 in your browser and be able to see the video processing.
-
-## Usage script v3.0
-Build up inputScript.json according to your input, follow up this format:
-```json
-{
-  "idLocation0" : {
-    "name" : "name_location0",
-    "description" : "description0",
-    "camaras" : [
-      {
-        "name" : "name_camara0", 
-        "src" : "source_camara0"
-      },
-      {
-        "name" : "name_camara1", 
-        "src" : "source_camara1"
-      }
-    ]
-  },
-  "idLocation1" : {
-    "name" : "name_location1",
-    "description" : "description1",
-    "camaras" : [
-      {
-        "name" : "name_camara", 
-        "src" : "source_camara"
-      },
-    ]
-  }
-}
-```
-
-Run people_counter_v3.py script.
-```bash
-python people_counter_v3.py
-```
-
-Then, you should open localhost:8080 in your browser and be able to see the video processing. One tab per each location and one carousel per each camara in the same location.
