@@ -18,35 +18,32 @@ The code is tested using Ubuntu 18.
 ## System Requirements
 - python3
 - python-pip
-- virtualenv (Recommended)
+- Pipenv
 
 ## Python Requirements
 
-### Virtualenv
-- #### Create
-> If you haven't create a virtualenv, create one.
+### Pipenv
+- #### Create a new python 3.10 environment
 ```bash
-virtualenv -p python3 _NAME_
+pipenv --python 3.10
 ```
 
-- #### Activate
-> Before running the script active the virtualenv.
+- #### Install dependencies
 ```bash
-source _NAME_/bin/activate
+pipenv install
 ```
 
-- #### Deactivate
-> If you are done running the script deactive the virtualenv.
+- #### Run the script
 ```bash
-deactivate
+pipenv run python main.py
 ```
 
 ### Dependencies
-
-> Use the package manager [pip](https://pip.pypa.io/en/stable/) to install the requirements after you have activated your venv created in somewhere else.
+Instead of managing dependencies through pip, install them using pipenv. This will ensure 
+the dependencies are correctly added to the Pipfile.
 
 ```bash
-pip install -r requirements.txt
+pipenv install (DEPEDENCY)
 ```
 
 ## Usage script
@@ -65,10 +62,10 @@ SKIP_FRAMES_ = 25
 Requirements:
 - Valid CamaraIDS.
 - Backend running.
-- Yolov3.
+- yoloV3.
 - Python Dependencies.
 - Videos Folder.
 
-Run main.py
+Run main.py inside the pipenv environment
 
-Open localhost:8080, all camaras should be displayed overthere.
+Open localhost:8080, all cameras should be displayed over there.
