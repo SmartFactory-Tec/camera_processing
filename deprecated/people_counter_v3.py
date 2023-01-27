@@ -101,7 +101,7 @@ class Camara:
 		# Instantiate our centroid tracker, then initialize a list to store
 		# each of our dlib correlation trackers, followed by a dictionary to
 		# map each unique object ID to a TrackableObject
-		self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50)
+		self.ct = CentroidTracker(max_disappeared_frames=40, max_distance=50)
 		self.trackers = []
 		self.trackableObjects = {}
 

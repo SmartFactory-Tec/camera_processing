@@ -263,7 +263,7 @@ class CamaraProcessing:
             self.overpass_post_condition = True
             del self.trackable_objects[object_id]
 
-        self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50, removeAction=remove_action)
+        self.ct = CentroidTracker(max_disappeared_frames=40, max_distance=50, remove_action=remove_action)
 
         # initialize the total number of frames processed thus far, along
         # with the total number of objects that have moved either up or down
