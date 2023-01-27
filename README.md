@@ -1,6 +1,6 @@
 # Vision algorithm - SEMS
 
-This repository aim to run a script ([main.py](main.py)) to process n videos/streams.
+This repository aim to run a script ([main.py](src/main.py)) to process n videos/streams.
 - Algorithms implemented:
   - People Counter
   - People Tracker
