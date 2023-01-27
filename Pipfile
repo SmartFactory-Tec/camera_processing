@@ -79,8 +79,8 @@ wcwidth = "~=0.2"
 webencodings = "~=0.5"
 widgetsnbextension = "~=3.5"
 zipp = "~=3.3"
-python-socketio = {extras = ["client"], version = "*"}
 toml = "*"
+python-socketio = {extras = ["client"], version = "*"}
 
 [dev-packages]
 

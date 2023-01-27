@@ -1235,6 +1235,7 @@
                 "sha256:561ca949e5bbb5d33409a37235db55c279235c78ee407802f1d2314fff8a8536",
                 "sha256:fb5d81b95d350f3a54838ebcb4c68a5353bbd1412ae8f068b1e5280faeb13074"
             ],
+            "markers": "python_version >= '3.7'",
             "version": "==1.5.0"
         },
         "werkzeug": {

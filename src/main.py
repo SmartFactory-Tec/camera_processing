@@ -1,7 +1,4 @@
-# USAGE
-# python3 main.py
 import os
-# Import Dependencies
 from multiprocessing import Process, Array, Value
 from multiprocessing.managers import BaseManager
 from src.centroidtracker import CentroidTracker
