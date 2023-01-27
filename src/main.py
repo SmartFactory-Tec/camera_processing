@@ -238,7 +238,7 @@ class CamaraProcessing:
 
             trackable_object = self.trackable_objects[object_id]
             self.people_in_frame_time_avg = get_avg(self.people_in_frame_time_avg,
-                                                    time.time() - trackable_object.startTime,
+                                                    time.time() - trackable_object.creation_time,
                                                     self.people_in_frame_count)
             self.people_in_frame_count += 1
 
