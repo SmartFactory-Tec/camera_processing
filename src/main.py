@@ -21,7 +21,7 @@ import math
 import socketio
 import socket
 
-ARGS= {
+ARGS = {
     "CAMARAIDS": [8],
     "BACK_ENDPOINT": "http://localhost:3001/",
     "NGROK_AVAILABLE": False,
@@ -34,53 +34,55 @@ ARGS= {
 
 app = Flask(__name__)
 
+
 class SocketIOProcess:
     sio = socketio.Client()
 
     def __init__(self, args):
         self.args = args
-        self.camaraIDs = self.args["CAMARAIDS"]
-        self.quantityCamaras = len(self.camaraIDs)
-        self.camarasInfo = []
-        self.sioConnected = False
-        self.hasCamarasInfo = False
-        self.sio.on('connect', self.connectSIO)
-        self.sio.on('disconnect', self.disconnectSIO)
-        self.sio.on('visionInit', self.visionInitSIO)
+        self.camera_ids = self.args["CAMARAIDS"]
+        self.camera_count = len(self.camera_ids)
+        self.per_camera_info = []
+        self.is_connected = False
+        self.has_camera_info = False
+
+        self.sio.on('connect', self.connect)
+        self.sio.on('disconnect', self.disconnect)
+        self.sio.on('visionInit', self.init_vision)
         self.sio.connect(self.args["BACK_ENDPOINT"])
 
-    def connectSIO(self):
+    def connect(self):
         print('Connected')
-        self.sioConnected = True
-        self.sio.emit('visionInit', self.camaraIDs)
+        self.is_connected = True
+        self.sio.emit('visionInit', self.camera_ids)
 
-    def disconnectSIO(self):
+    def disconnect(self):
         print('Disconnected')
-        self.sioConnected = False
-        self.hasCamarasInfo = False
-        self.camarasInfo = []
+        self.is_connected = False
+        self.has_camera_info = False
+        self.per_camera_info = []
 
-    def waitSIO(self):
+    def wait(self):
         self.sio.wait()
 
-    def visionInitSIO(self, camarasInfo):
-        self.camarasInfo = camarasInfo
-        self.hasCamarasInfo = True
-        print('CamaraInfo ', camarasInfo)
+    def init_vision(self, per_camera_info):
+        self.per_camera_info = per_camera_info
+        self.has_camera_info = True
+        print('CamaraInfo ', per_camera_info)
 
-    def getCamaraInfo(self, id = None):
-        if not self.hasCamarasInfo:
+    def get_camera_info(self, camera_id=None):
+        if not self.has_camera_info:
             return False
 
-        if not id:
-            return self.camarasInfo
+        if not camera_id:
+            return self.per_camera_info
 
-        return self.camarasInfo[id]
+        return self.per_camera_info[camera_id]
 
-    def sendCamaraData(self, id, data):
-        if self.sioConnected:
+    def send_camera_data(self, camera_id, data):
+        if self.is_connected:
             self.sio.emit('visionPost', data=(
-                self.camarasInfo[id]['id'],
+                self.per_camera_info[camera_id]['camera_id'],
                 data["in_direction"],
                 data["out_direction"],
                 data["counter"],
@@ -89,8 +91,8 @@ class SocketIOProcess:
                 data["fps"],
             ))
 
-    def setCamaraURL(self, id):
-        if self.sioConnected:
+    def set_camera_url(self, camera_id):
+        if self.is_connected:
             if self.args["NGROK_AVAILABLE"] and self.args["FORWARD_CAMERA"]:
                 endpoint = 'http://sems.ngrok.io/camara/'
             elif self.args["FORWARD_CAMERA"]:
@@ -99,73 +101,81 @@ class SocketIOProcess:
                 endpoint = ''
 
             self.sio.emit('updateCamara', data=(
-                self.camarasInfo[id]['id'],
-                endpoint + str(id)
+                self.per_camera_info[camera_id]['camera_id'],
+                endpoint + str(camera_id)
             ))
+
 
 class CamaraRead:
     MAX_FPS = 34
     MAX_SKIP = 3
 
-    def __init__(self, sources, inputFrames, frameShapes, flags, args):
+    def __init__(self, sources, input_frames, frame_shapes, flags, args):
         self.sources = sources
-        self.inputFrames = inputFrames
-        self.frameShapes = frameShapes
+        self.input_frames = input_frames
+        self.frame_shapes = frame_shapes
         self.flags = flags
         self.args = args
         for index in range(len(sources)):
-            readThread = threading.Thread(target=self.mainLoop, args=(index,), daemon=True)
-            readThread.start()
+            read_thread = threading.Thread(target=self.main_loop, args=(index,), daemon=True)
+            read_thread.start()
 
-        readThread.join()
+        read_thread.join()
 
-    def mainLoop(self, index):
+    def main_loop(self, index):
         source = self.sources[index]
-        inputFrame = self.inputFrames[index]
-        frameShape = self.frameShapes[index]
+        initial_input_frame = self.input_frames[index]
+        frame_shape = self.frame_shapes[index]
         flag = self.flags[index]
 
         print("[INFO] opening video file...", source)
         vs = cv2.VideoCapture(source)
         vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-        inputFrame_ = np.frombuffer(inputFrame, dtype=np.uint8)
-        inputFrame_ = inputFrame_.reshape(frameShape)
 
-        q = Queue(maxsize = 0)
-        notTakenCounter = 0
+        # why do we need to interpret the frame as a one dimensional array and then reshape it back into its original
+        # shape??
+        input_frame = np.frombuffer(initial_input_frame, dtype=np.uint8)
+        input_frame = input_frame.reshape(frame_shape)
+
+        q = Queue(maxsize=0)
+        not_taken_counter = 0
 
         while True:
-            lastTime = time.time()
+            prev_exec = time.time()
             status, frame = vs.read()
 
             if not status:
+                # I assume this reinitializes the device if it fails
+                # TODO nicer health check and reinitialization
                 vs = cv2.VideoCapture(source)
                 vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
                 continue
 
             frame = imutils.resize(frame, width=500)
 
-            if notTakenCounter == 0:
+            if not_taken_counter == 0:
                 q.put(frame)
 
             if not flag.value:
                 if (q.empty()):
-                    inputFrame_[:] = frame
-                    notTakenCounter = 0
+                    input_frame[:] = frame
+                    not_taken_counter = 0
                 else:
-                    inputFrame_[:] = q.get()
+                    input_frame[:] = q.get()
                 flag.value = True
 
-            notTakenCounter = (notTakenCounter + 1) % CamaraRead.MAX_SKIP
+            not_taken_counter = (not_taken_counter + 1) % CamaraRead.MAX_SKIP
 
-            while time.time() - lastTime  < 1 / CamaraRead.MAX_FPS:
+            while time.time() - prev_exec < 1 / CamaraRead.MAX_FPS:
+                # TODO this needlessly consumes CPU time, rework using waits
                 pass
+
 
 class CamaraProcessing:
     COLOR_RED = (0, 0, 255)
     COLOR_GREEN = (0, 255, 0)
     COLOR_BLACK = (0, 0, 0)
-    socialDistanceThreshold = 90
+    social_distance_threshold = 90
 
     CLASSES = None
 
@@ -176,14 +186,16 @@ class CamaraProcessing:
     with open(abs_file_path, 'r') as f:
         CLASSES = [line.strip() for line in f.readlines()]
 
-    def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, inputFrame, outputFrame, frameShape, flag, socketManager, args):
+    # why is this init so damn long
+    def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, input_frame,
+                 output_frame, frame_shape, flag, socket_manager, args):
         self.id = id
         self.v_orientation = v_orientation
         self.run_distance_violation = run_distance_violation
         self.detect_just_left_side = detect_just_left_side
-        self.camaraId = "Camara" + str(self.id)
-        self.socketManager = socketManager
-        self.socketManager.setCamaraURL(self.id)
+        self.camera_id = "Camara" + str(self.id)
+        self.socket_manager = socket_manager
+        self.socket_manager.set_camera_url(self.id)
         self.args = args
 
         # Load Model
@@ -210,61 +222,63 @@ class CamaraProcessing:
         self.NMS_THRESH = 0.3
 
         # People in Frame - Time Average
-        self.peopleTimeAvg = 0
-        self.peopleCounter = 0
+        self.people_in_frame_time_avg = 0
+        self.people_in_frame_count = 0
 
         # Instantiate our centroid tracker, initialize a list to store
         # each of our dlib correlation trackers and a dictionary to
         # map each unique object ID to a TrackableObject
         self.trackers = []
-        self.trackableObjects = {}
+        self.trackable_objects = {}
 
-        # Instantiate custom removeAction for centroid tracker.
-        def removeAction(objectID):
-            def getAvg(prev_avg, x, n):
+        # Instantiate custom remove_action for centroid tracker.
+        def remove_action(object_id):
+            def get_avg(prev_avg, x, n):
                 return (prev_avg * n + x) / (n + 1)
 
-            tmpTO = self.trackableObjects[objectID]
-            self.peopleTimeAvg = getAvg(self.peopleTimeAvg, time.time() - tmpTO.startTime, self.peopleCounter)
-            self.peopleCounter += 1
+            trackable_object = self.trackable_objects[object_id]
+            self.people_in_frame_time_avg = get_avg(self.people_in_frame_time_avg,
+                                                    time.time() - trackable_object.startTime,
+                                                    self.people_in_frame_count)
+            self.people_in_frame_count += 1
 
-            def determineDirection(self, to):
+            def determine_direction(self, to):
                 if self.v_orientation:
                     x = [c[0] for c in to.centroids]
 
-                    if x[len(x) - 1] < (self.W // 2) and x[0] > (self.W // 2):
-                        self.totalInDir += 1
+                    if x[len(x) - 1] < (self.W // 2) < x[0]:
+                        self.total_going_in += 1
 
-                    elif x[len(x) - 1] > (self.W // 2) and x[0] < (self.W // 2):
-                        self.totalOutDir += 1
+                    elif x[len(x) - 1] > (self.W // 2) > x[0]:
+                        self.total_going_out += 1
                 else:
                     y = [c[1] for c in to.centroids]
 
-                    if y[len(y) - 1] < (self.H // 2) and y[0] > (self.H // 2):
-                        self.totalInDir += 1
-                    elif y[len(y) - 1] > (self.H // 2) and y[0] < (self.H // 2):
-                        self.totalOutDir += 1
+                    if y[len(y) - 1] < (self.H // 2) < y[0]:
+                        self.total_going_in += 1
+                    elif y[len(y) - 1] > (self.H // 2) > y[0]:
+                        self.total_going_out += 1
 
-            determineDirection(self, tmpTO)
-            self.overpassPostCondition =  True
-            del self.trackableObjects[objectID]
+            determine_direction(self, trackable_object)
+            self.overpass_post_condition = True
+            del self.trackable_objects[object_id]
 
-        self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50, removeAction=removeAction)
+        self.ct = CentroidTracker(maxDisappeared=40, maxDistance=50, removeAction=remove_action)
 
         # initialize the total number of frames processed thus far, along
         # with the total number of objects that have moved either up or down
-        self.totalFrames = 0
-        self.totalInDir = last_record["in_direction"]
-        self.totalOutDir = last_record["out_direction"]
+        self.total_frames = 0
+        self.total_going_in = last_record["in_direction"]
+        self.total_going_out = last_record["out_direction"]
         self.status = "Waiting"
-        self.fpsValue = 0
+        self.fps = 0
 
         # Counter for social distance violations.
-        self.totalDistanceViolations = 0
+        self.distance_violation_count = 0
 
         self.data = {
-            "in_direction": self.totalInDir,
-            "out_direction": self.totalOutDir,
+            "in_direction": self.total_going_in,
+            "out_direction": self.total_going_out,
             "counter": 0,
             "social_distancing_v": 0,
             "in_frame_time_avg": 0,
@@ -273,44 +287,45 @@ class CamaraProcessing:
 
         # Start the frames per second throughput estimator
         self.fps = None
-        callFpsThread = threading.Thread(target=self.callFps, args=(), daemon=True)
-        callFpsThread.start()
+        call_fps_thread = threading.Thread(target=self.call_fps, args=(), daemon=True)
+        call_fps_thread.start()
 
         # Start data post Thread
-        self.overpassPostCondition = False
-        callPostThread = threading.Thread(target=self.callPost, args=(), daemon=True)
-        callPostThread.start()
+        self.overpass_post_condition = False
+        call_post_thread = threading.Thread(target=self.call_post, args=(), daemon=True)
+        call_post_thread.start()
 
-        inputFrame_ = np.frombuffer(inputFrame, dtype=np.uint8)
-        inputFrame_ = inputFrame_.reshape(frameShape)
-        outputFrame_ = np.frombuffer(outputFrame, dtype=np.uint8)
-        outputFrame_ = outputFrame_.reshape(frameShape)
+        # again doing this, why?
+        input_frame_2 = np.frombuffer(input_frame, dtype=np.uint8)
+        input_frame_2 = input_frame_2.reshape(frame_shape)
+        output_frame_2 = np.frombuffer(output_frame, dtype=np.uint8)
+        output_frame_2 = output_frame_2.reshape(frame_shape)
         try:
-            self.gen_frames(inputFrame_, outputFrame_, flag)
+            self.gen_frames(input_frame_2, output_frame_2, flag)
         except KeyboardInterrupt:
             self.end_process()
 
-    def callPost(self):
-        callPostThread = threading.Timer(3.0, self.callPost, args=())
-        callPostThread.start()
+    def call_post(self):
+        call_post_thread = threading.Timer(3.0, self.call_post, args=())
+        call_post_thread.start()
 
         # Sending Camara Data
-        if self.data["counter"] != 0 or self.overpassPostCondition:
-            self.overpassPostCondition = False
-            self.socketManager.sendCamaraData(self.id, self.data)
+        if self.data["counter"] != 0 or self.overpass_post_condition:
+            self.overpass_post_condition = False
+            self.socket_manager.send_camera_data(self.id, self.data)
 
-    def callFps(self):
-        if self.fps != None:
+    def call_fps(self):
+        if self.fps is not None:
             self.fps.stop()
             if self.args["VERBOSE"]:
                 print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
                 print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
-            self.fpsValue = self.fps.fps()
+            self.fps = self.fps.fps()
 
         self.fps = FPS().start()
 
-        callFpsThread = threading.Timer(2.0, self.callFps, args=())
-        callFpsThread.start()
+        call_fps_thread = threading.Timer(2.0, self.call_fps, args=())
+        call_fps_thread.start()
 
     '''
     Function to get the social distance violations based on the position
@@ -325,6 +340,7 @@ class CamaraProcessing:
         better accuracy on social distancing violation detections.
         https://developer.ridgerun.com/wiki/index.php?title=Birds_Eye_View/Introduction/Research
     '''
+
     def get_social_distance_violations(self, objects):
         # Ensure there are *at least* two people detections (required in
         # order to compute our pairwise distance maps).
@@ -342,61 +358,61 @@ class CamaraProcessing:
                     # check to see if the distance between any two
                     # centroid pairs is less than the configured number
                     # of pixels
-                    if D[i, j] < self.socialDistanceThreshold:
+                    if D[i, j] < self.social_distance_threshold:
                         # update our violation set with the indexes of
                         # the centroid pairs
                         point_violations.add(i)
                         point_violations.add(j)
         return point_violations
 
-    def generate_boxes_confidences_classids(self, outs, threshold):
+    def generate_boxes_confidences_class_ids(self, outs, threshold):
         boxes = []
         confidences = []
-        classids = []
+        class_ids = []
 
         for out in outs:
-                for detection in out:
-                    # Get the scores, classid, and the confidence of the prediction
-                    scores = detection[5:]
-                    classid = np.argmax(scores)
-                    confidence = scores[classid]
+            for detection in out:
+                # Get the scores, class_id, and the confidence of the prediction
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
 
-                    if confidence > threshold:
+                if confidence > threshold:
+                    # compute the (x, y)-coordinates of the bounding box
+                    # for the object
+                    box = np.array(detection[0:4]) * np.array([self.W, self.H, self.W, self.H])
+                    (center_x, center_y, width, height) = box.astype("int")
 
-                        # compute the (x, y)-coordinates of the bounding box
-                        # for the object
-                        box = np.array(detection[0:4]) * np.array([self.W, self.H, self.W, self.H])
-                        (centerX, centerY, width, height) = box.astype("int")
+                    start_x = int(center_x - (width / 2))
+                    start_y = int(center_y - (height / 2))
 
-                        startX = int(centerX - (width / 2))
-                        startY = int(centerY - (height / 2))
+                    # Append to list
+                    boxes.append([start_x, start_y, int(width), int(height)])
+                    confidences.append(float(confidence))
+                    class_ids.append(class_id)
 
-                        # Append to list
-                        boxes.append([startX, startY, int(width), int(height)])
-                        confidences.append(float(confidence))
-                        classids.append(classid)
-
-        return boxes, confidences, classids
+        return boxes, confidences, class_ids
 
     def is_in_valid_area(self, box):
-        startX, startY, width, height = box
+        start_x, start_y, width, height = box
         if self.detect_just_left_side:
-            centroid = ((startX + width // 2), (startY + height // 2))
+            centroid = ((start_x + width // 2), (start_y + height // 2))
             return centroid[0] < self.W // 2
         return True
 
-    def gen_frames(self, inputFrame_, outputFrame_, flag):
+    def gen_frames(self, input_frame, output_frame, flag):
         # Loop over frames from the video stream.
 
         while True:
             # Counter for social distance violations.
-            self.totalDistanceViolations = 0
+            self.distance_violation_count = 0
 
+            # TODO wastes CPU time, rework with waits
             # Grab the next frame if available.
-            while(not flag.value):
+            while not flag.value:
                 pass
             flag.value = False
-            frame[:] = inputFrame_
+            frame[:] = input_frame
 
             # Convert the frame from BGR to RGB for dlib.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -413,60 +429,61 @@ class CamaraProcessing:
 
             # check to see if we should run a more computationally expensive
             # object detection method to aid our tracker
-            if self.totalFrames == 0:
+            if self.total_frames == 0:
                 # set the status and initialize our new set of object trackers
                 self.status = "Detecting"
                 self.trackers = []
 
                 # convert the frame to a blob and pass the blob through the
                 # network and obtain the detections
-                blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
+                blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
                 self.net.setInput(blob)
 
                 start = time.time()
                 detections = self.net.forward(self.layer_names)
                 end = time.time()
                 if self.args["VERBOSE"]:
-                    print ("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
+                    print("[INFO] YOLOv3 took {:6f} seconds".format(end - start))
 
-                boxes, confidences, classids = self.generate_boxes_confidences_classids(detections, self.args["CONFIDENCE"])
+                boxes, confidences, classids = self.generate_boxes_confidences_class_ids(detections,
+                                                                                         self.args["CONFIDENCE"])
 
                 idxs = cv2.dnn.NMSBoxes(boxes, confidences, self.args["CONFIDENCE"], self.NMS_THRESH)
 
                 # loop over the detections
                 if len(idxs) > 0:
-                        # loop over the indexes we are keeping
-                        for i in idxs.flatten():
-                            # extract the confidence (i.e., probability) associated
-                            # with the prediction
-                            confidence = confidences[i]
+                    # loop over the indexes we are keeping
+                    for i in idxs.flatten():
+                        # extract the confidence (i.e., probability) associated
+                        # with the prediction
+                        confidence = confidences[i]
 
-                            # filter out weak detections by requiring a minimum
-                            # confidence
-                            if confidence > self.args["CONFIDENCE"] and self.is_in_valid_area(boxes[i]):
-                                # extract the index of the class label from the
-                                # detections list
-                                idx = int(classids[i])
+                        # filter out weak detections by requiring a minimum
+                        # confidence
+                        if confidence > self.args["CONFIDENCE"] and self.is_in_valid_area(boxes[i]):
+                            # extract the index of the class label from the
+                            # detections list
+                            idx = int(classids[i])
 
-                                # if the class label is not a person, ignore it
-                                if CamaraProcessing.CLASSES[idx] != "person":
-                                    continue
+                            # if the class label is not a person, ignore it
+                            if CamaraProcessing.CLASSES[idx] != "person":
+                                continue
 
-                                startX, startY, width, height = boxes[i]
+                            startX, startY, width, height = boxes[i]
 
-                                endX = startX + width
-                                endY = startY + height
+                            endX = startX + width
+                            endY = startY + height
 
-                                # construct a dlib rectangle object from the bounding
-                                # box coordinates and then start the dlib correlation
-                                # tracker`
-                                tracker = dlib.correlation_tracker()
-                                rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
-                                tracker.start_track(rgb, rect)
+                            # construct a dlib rectangle object from the bounding
+                            # box coordinates and then start the dlib correlation
+                            # tracker`
+                            tracker = dlib.correlation_tracker()
+                            rect = dlib.rectangle(int(startX), int(startY), int(endX), int(endY))
+                            tracker.start_track(rgb, rect)
 
-                                # add the tracker to our list of trackers so we can
-                                # utilize it during skip frames
-                                self.trackers.append(tracker)
+                            # add the tracker to our list of trackers so we can
+                            # utilize it during skip frames
+                            self.trackers.append(tracker)
 
             # otherwise, we should utilize our object *trackers* rather than
             # object *detectors* to obtain a higher frame processing throughput
@@ -494,7 +511,7 @@ class CamaraProcessing:
             # object crosses this line we will determine whether they were
             # moving 'up' or 'down'
             if self.v_orientation:
-                cv2.line(frame, (self.W//2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
+                cv2.line(frame, (self.W // 2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
             else:
                 if self.detect_just_left_side:
                     cv2.line(frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
@@ -514,51 +531,51 @@ class CamaraProcessing:
                 violate = []
 
             # loop over the tracked objects
-            for (i, (objectID, centroid)) in enumerate(objects.items()):
+            for (i, (object_id, centroid)) in enumerate(objects.items()):
 
                 # check to see if a trackable object exists for the current
                 # object ID
-                to = self.trackableObjects.get(objectID, None)
+                to = self.trackable_objects.get(object_id, None)
 
                 # if there is no existing trackable object, create one
                 if to is None:
-                    to = TrackableObject(objectID, centroid)
+                    to = TrackableObject(object_id, centroid)
 
                 # otherwise, append new centroid
                 else:
                     to.centroids.append(centroid)
 
                 # store the trackable object in our dictionary
-                self.trackableObjects[objectID] = to
+                self.trackable_objects[object_id] = to
 
                 # draw both the ID of the object and the centroid of the
                 # object on the output frame
-                x_start, y_start, x_end, y_end = points[objectID]
+                x_start, y_start, x_end, y_end = points[object_id]
 
-                text = "ID {}".format(objectID)
+                text = "ID {}".format(object_id)
                 color = self.COLOR_GREEN
 
                 if i in violate:
-                    self.totalDistanceViolations += 1
+                    self.distance_violation_count += 1
                     color = self.COLOR_RED
 
                 cv2.rectangle(frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
                 cv2.putText(frame, text, (x_start + 5, y_start + 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 1)
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 1)
                 cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
                 cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
 
             self.data = {
-                "in_direction": self.totalInDir,
-                "out_direction": self.totalOutDir,
+                "in_direction": self.total_going_in,
+                "out_direction": self.total_going_out,
                 "counter": len(objects.items()),
-                "social_distancing_v": math.ceil(self.totalDistanceViolations/2),
-                "in_frame_time_avg": round(self.peopleTimeAvg, 3),
-                "fps": int(self.fpsValue),
+                "social_distancing_v": math.ceil(self.distance_violation_count / 2),
+                "in_frame_time_avg": round(self.people_in_frame_time_avg, 3),
+                "fps": int(self.fps),
             }
 
             # Publish frame.
-            outputFrame_[:] = frame
+            output_frame[:] = frame
 
             # Show the output frame.
             if self.args["VERBOSE"]:
@@ -570,7 +587,7 @@ class CamaraProcessing:
                     break
 
             # Increment frames counter.
-            self.totalFrames = (self.totalFrames + 1) % self.args["SKIP_FRAMES"]
+            self.total_frames = (self.total_frames + 1) % self.args["SKIP_FRAMES"]
 
             # Update FPS counter.
             self.fps.update()
@@ -583,6 +600,7 @@ class CamaraProcessing:
         # close any open windows
         cv2.destroyAllWindows()
 
+
 processReference = []
 sources = []
 frameShapes = []
@@ -590,12 +608,14 @@ inputFrames = []
 outputFrames = []
 flags = []
 
-@app.route('/camara/<id>')
-def camaraStream(id):
-    #Video streaming route. Put this in the src attribute of an img tag
-    return Response(showFrame(int(id)), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-def showFrame(id):
+@app.route('/camara/<id>')
+def camera_stream_route(id):
+    # Video streaming route. Put this in the src attribute of an img tag
+    return Response(show_frame(int(id)), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+def show_frame(id):
     outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
     outputFrame = outputFrame.reshape(frameShapes[id])
     while True:
@@ -605,42 +625,53 @@ def showFrame(id):
             ret, buffer = cv2.imencode('.jpg', np.zeros(frameShapes[id], np.uint8))
         frame_ready = buffer.tobytes()
         yield (b'--frame\r\n'
-                        b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
-        time.sleep(1 / 60 ) # Sleep 1/(FPS * 2)
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
+        time.sleep(1 / 60)  # Sleep 1/(FPS * 2)
+
 
 @app.route('/')
-def index():
+def index_route():
     """Video streaming home page."""
-    return render_template('indexv4.html', len = len(ARGS["CAMARAIDS"]), camaraIDs = ARGS["CAMARAIDS"])
+    return render_template('indexv4.html', len=len(ARGS["CAMARAIDS"]), camaraIDs=ARGS["CAMARAIDS"])
 
-BaseManager.register("socketManager", SocketIOProcess)
-def getManager():
+
+BaseManager.register("socket_manager", SocketIOProcess)
+
+
+def get_manager():
     m = BaseManager()
     m.start()
     return m
 
+
 if __name__ == '__main__':
     # Initialize Socket Manager.
-    manager = getManager()
-    socketManager = manager.socketManager(ARGS)
+    manager = get_manager()
+    socketManager = manager.socket_manager(ARGS)
 
+    # TODO change into a wait
     # Wait till Camaras Info Received.
-    while not socketManager.getCamaraInfo():
+    while not socketManager.get_camera_info():
         pass
 
-    camarasInfo = socketManager.getCamaraInfo()
+    per_camera_info = socketManager.get_camera_info()
 
-    for index, camara in enumerate(camarasInfo):
+    for index, camara in enumerate(per_camera_info):
         cap = cv2.VideoCapture(camara["source"])
         ret, frame = cap.read()
         frame = imutils.resize(frame, width=500)
         frameShapes.append(frame.shape)
         cap.release()
 
-        inputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
-        outputFrames.append(Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+        inputFrames.append(
+            Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
+        outputFrames.append(
+            Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
         flags.append(Value(ctypes.c_bool, False))
-        processReference.append(Process(target=CamaraProcessing, args=(index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"], camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager, ARGS)))
+        processReference.append(Process(target=CamaraProcessing, args=(
+            index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"],
+            camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager,
+            ARGS)))
         processReference[-1].start()
 
         sources.append(camara["source"])
@@ -648,10 +679,11 @@ if __name__ == '__main__':
     readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags, ARGS))
     readProcessRef.start()
 
+    # TODO don't use waitress directly, this should expose a flask API to use with any server
     from waitress import serve
 
-    app.debug=True
-    app.use_reloader=False
+    app.debug = True
+    app.use_reloader = False
     serve(app, host="0.0.0.0", port=8080)
     print("Server 0.0.0.0:8080")
-    socketManager.waitSIO()
+    socketManager.wait()

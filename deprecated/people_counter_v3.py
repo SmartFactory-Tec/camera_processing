@@ -475,7 +475,7 @@ class Camara:
 				frame_ready = buffer.tobytes()
 				yield (b'--frame\r\n'
 								b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
-		time.sleep(1 / self.fpsValue * 2)
+		time.sleep(1 / self.fps * 2)
 
 @app.route('/camara/<id>')
 def camaraStream(id):
