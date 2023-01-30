@@ -19,18 +19,6 @@ import socketio
 import socket
 from config import load_config
 
-# TODO delete this
-# ARGS = {
-#     "CAMARAIDS": [8],
-#     "BACK_ENDPOINT": "http://localhost:3001/",
-#     "NGROK_AVAILABLE": False,
-#     "GPU_AVAILABLE": True,
-#     "FORWARD_CAMERA": False,
-#     "VERBOSE": False,
-#     "CONFIDENCE": 0.3,
-#     "SKIP_FRAMES": 25,
-# }
-
 # TODO follow proper flask guidelines
 app = Flask(__name__)
 
@@ -620,7 +608,7 @@ def show_frame(id):
     outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
     outputFrame = outputFrame.reshape(frameShapes[id])
     while True:
-        if ARGS["FORWARD_CAMERA"]:
+        if app.config['forward_camera']:
             ret, buffer = cv2.imencode('.jpg', outputFrame)
         else:
             ret, buffer = cv2.imencode('.jpg', np.zeros(frameShapes[id], np.uint8))
@@ -633,7 +621,7 @@ def show_frame(id):
 @app.route('/')
 def index_route():
     """Video streaming home page."""
-    return render_template('indexv4.html', len=len(ARGS["CAMARAIDS"]), camaraIDs=ARGS["CAMARAIDS"])
+    return render_template('indexv4.html', len=len(app.config['camera_ids']), camaraIDs=app.config['camera_ids'])
 
 
 BaseManager.register("socket_manager", SocketIOProcess)
@@ -647,6 +635,8 @@ def get_manager():
 
 if __name__ == '__main__':
     config = load_config()
+
+    app.config.from_mapping(config)
 
     # Initialize Socket Manager.
     manager = get_manager()
