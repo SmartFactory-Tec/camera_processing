@@ -1,33 +1,18 @@
-import os
 from multiprocessing import Process, Array, Value
 from multiprocessing.managers import BaseManager
-
 from sems_vision.socket_io_process import SocketIOProcess
-from sems_vision.centroid_tracker import CentroidTracker
-from sems_vision.trackable_object import TrackableObject
 from sems_vision.camera_processing import CamaraProcessing
 from sems_vision.camera_read import CamaraRead
 from flask import Flask, render_template, Response
-from imutils.video import FPS
-from scipy.spatial import distance as dist
-from queue import Queue
 import numpy as np
 import imutils
 import time
-import dlib
 import cv2
-import threading
 import ctypes
-import math
 from config import load_config
 
 # TODO follow proper flask guidelines
 app = Flask(__name__)
-
-
-
-
-
 
 processReference = []
 sources = []
