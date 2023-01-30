@@ -1,163 +1,15 @@
-import os
-from multiprocessing import Process, Array, Value
-from multiprocessing.managers import BaseManager
-from src.centroidtracker import CentroidTracker
-from src.trackableobject import TrackableObject
-from flask import Flask, render_template, Response
-from imutils.video import FPS
-from scipy.spatial import distance as dist
-from queue import Queue
-import numpy as np
-import imutils
-import time
-import dlib
-import cv2
-import threading
-import ctypes
 import math
-import socketio
-import socket
-from config import load_config
+import os
+import cv2
+import time
+import threading
+import dlib
+import numpy as np
+from imutils.video import FPS
+from scipy.spatial.distance import cdist
 
-# TODO follow proper flask guidelines
-app = Flask(__name__)
-
-
-class SocketIOProcess:
-    sio = socketio.Client()
-
-    def __init__(self, args):
-        self.args = args
-        self.camera_ids = self.args["camera_ids"]
-        self.camera_count = len(self.camera_ids)
-        self.per_camera_info = []
-        self.is_connected = False
-        self.has_camera_info = False
-
-        self.sio.on('connect', self.connect)
-        self.sio.on('disconnect', self.disconnect)
-        self.sio.on('visionInit', self.init_vision)
-        self.sio.connect(self.args["back_endpoint"])
-
-    def connect(self):
-        print('Connected')
-        self.is_connected = True
-        self.sio.emit('visionInit', self.camera_ids)
-
-    def disconnect(self):
-        print('Disconnected')
-        self.is_connected = False
-        self.has_camera_info = False
-        self.per_camera_info = []
-
-    def wait(self):
-        self.sio.wait()
-
-    def init_vision(self, per_camera_info):
-        self.per_camera_info = per_camera_info
-        self.has_camera_info = True
-        print('CamaraInfo ', per_camera_info)
-
-    def get_camera_info(self, camera_id=None):
-        if not self.has_camera_info:
-            return False
-
-        if not camera_id:
-            return self.per_camera_info
-
-        return self.per_camera_info[camera_id]
-
-    def send_camera_data(self, camera_id, data):
-        if self.is_connected:
-            self.sio.emit('visionPost', data=(
-                self.per_camera_info[camera_id]['camera_id'],
-                data["in_direction"],
-                data["out_direction"],
-                data["counter"],
-                data["social_distancing_v"],
-                data["in_frame_time_avg"],
-                data["fps"],
-            ))
-
-    def set_camera_url(self, camera_id):
-        if self.is_connected:
-            if self.args["ngrok_available"] and self.args["forward_camera"]:
-                endpoint = 'http://sems.ngrok.io/camara/'
-            elif self.args["forward_camera"]:
-                endpoint = 'http://' + socket.getfqdn() + ':8080/camara/'
-            else:
-                endpoint = ''
-
-            self.sio.emit('updateCamara', data=(
-                self.per_camera_info[camera_id]['camera_id'],
-                endpoint + str(camera_id)
-            ))
-
-
-class CamaraRead:
-    MAX_FPS = 34
-    MAX_SKIP = 3
-
-    def __init__(self, sources, input_frames, frame_shapes, flags, args):
-        self.sources = sources
-        self.input_frames = input_frames
-        self.frame_shapes = frame_shapes
-        self.flags = flags
-        self.args = args
-        for index in range(len(sources)):
-            read_thread = threading.Thread(target=self.main_loop, args=(index,), daemon=True)
-            read_thread.start()
-
-        # TODO weird, analyze for possible error
-        read_thread.join()
-
-    def main_loop(self, index):
-        source = self.sources[index]
-        initial_input_frame = self.input_frames[index]
-        frame_shape = self.frame_shapes[index]
-        flag = self.flags[index]
-
-        print("[INFO] opening video file...", source)
-        vs = cv2.VideoCapture(source)
-        vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-
-        # why do we need to interpret the frame as a one dimensional array and then reshape it back into its original
-        # shape??
-        input_frame = np.frombuffer(initial_input_frame, dtype=np.uint8)
-        input_frame = input_frame.reshape(frame_shape)
-
-        q = Queue(maxsize=0)
-        not_taken_counter = 0
-
-        while True:
-            prev_exec = time.time()
-            status, frame = vs.read()
-
-            if not status:
-                # I assume this reinitializes the device if it fails
-                # TODO nicer health check and reinitialization
-                vs = cv2.VideoCapture(source)
-                vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-                continue
-
-            frame = imutils.resize(frame, width=500)
-
-            if not_taken_counter == 0:
-                q.put(frame)
-
-            if not flag.value:
-                if (q.empty()):
-                    input_frame[:] = frame
-                    not_taken_counter = 0
-                else:
-                    input_frame[:] = q.get()
-                flag.value = True
-
-            not_taken_counter = (not_taken_counter + 1) % CamaraRead.MAX_SKIP
-
-            while time.time() - prev_exec < 1 / CamaraRead.MAX_FPS:
-                # TODO this needlessly consumes CPU time, rework using waits
-                pass
+from centroid_tracker import CentroidTracker
+from trackable_object import TrackableObject
 
 
 class CamaraProcessing:
@@ -213,6 +65,11 @@ class CamaraProcessing:
         # People in Frame - Time Average
         self.people_in_frame_time_avg = 0
         self.people_in_frame_count = 0
+
+        # TODO this was a fix to using a local scope variable inside the process
+        # check if it can be scoped to the function, instead of as a member
+        # also check if it even works
+        self.frame = np.zeros(frame_shape)
 
         # Instantiate our centroid tracker, initialize a list to store
         # each of our dlib correlation trackers and a dictionary to
@@ -339,7 +196,7 @@ class CamaraProcessing:
             # Euclidean distances between all pairs of the centroids.
             centroids = objects.values()
             np_centroids = np.array(list(centroids))
-            D = dist.cdist(np_centroids, np_centroids, metric="euclidean")
+            D = cdist(np_centroids, np_centroids, metric="euclidean")
 
             # loop over the upper triangular of the distance matrix
             for i in range(0, D.shape[0]):
@@ -401,14 +258,14 @@ class CamaraProcessing:
             while not flag.value:
                 pass
             flag.value = False
-            frame[:] = input_frame
+            self.frame[:] = input_frame
 
             # Convert the frame from BGR to RGB for dlib.
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
 
             # if the frame dimensions are empty, set them
             if self.W is None or self.H is None:
-                (self.H, self.W) = frame.shape[:2]
+                (self.H, self.W) = self.frame.shape[:2]
 
             # initialize the current status along with our list of bounding
             # box rectangles returned by either (1) our object detector or
@@ -425,7 +282,7 @@ class CamaraProcessing:
 
                 # convert the frame to a blob and pass the blob through the
                 # network and obtain the detections
-                blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+                blob = cv2.dnn.blobFromImage(self.frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
                 self.net.setInput(blob)
 
                 start = time.time()
@@ -500,12 +357,12 @@ class CamaraProcessing:
             # object crosses this line we will determine whether they were
             # moving 'up' or 'down'
             if self.v_orientation:
-                cv2.line(frame, (self.W // 2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
+                cv2.line(self.frame, (self.W // 2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
             else:
                 if self.detect_just_left_side:
-                    cv2.line(frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
+                    cv2.line(self.frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
                 else:
-                    cv2.line(frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
+                    cv2.line(self.frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
 
             # use the centroid tracker to associate the (1) old object
             # centroids with (2) the newly computed object centroids
@@ -548,11 +405,11 @@ class CamaraProcessing:
                     self.distance_violation_count += 1
                     color = self.COLOR_RED
 
-                cv2.rectangle(frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
-                cv2.putText(frame, text, (x_start + 5, y_start + 10),
+                cv2.rectangle(self.frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
+                cv2.putText(self.frame, text, (x_start + 5, y_start + 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 1)
-                cv2.circle(frame, (centroid[0], centroid[1]), 4, color, -1)
-                cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
+                cv2.circle(self.frame, (centroid[0], centroid[1]), 4, color, -1)
+                cv2.rectangle(self.frame, (x_start, y_start), (x_end, y_end), color, 1)
 
             self.data = {
                 "in_direction": self.total_going_in,
@@ -564,11 +421,11 @@ class CamaraProcessing:
             }
 
             # Publish frame.
-            output_frame[:] = frame
+            output_frame[:] = self.frame
 
             # Show the output frame.
             if self.args["verbose"]:
-                cv2.imshow("Frame", frame)
+                cv2.imshow("Frame", self.frame)
                 key = cv2.waitKey(1) & 0xFF
 
                 # if the `q` key was pressed, break from the loop
@@ -588,95 +445,3 @@ class CamaraProcessing:
 
         # close any open windows
         cv2.destroyAllWindows()
-
-
-processReference = []
-sources = []
-frameShapes = []
-inputFrames = []
-outputFrames = []
-flags = []
-
-
-@app.route('/camara/<id>')
-def camera_stream_route(id):
-    # Video streaming route. Put this in the src attribute of an img tag
-    return Response(show_frame(int(id)), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-def show_frame(id):
-    outputFrame = np.frombuffer(outputFrames[id], dtype=np.uint8)
-    outputFrame = outputFrame.reshape(frameShapes[id])
-    while True:
-        if app.config['forward_camera']:
-            ret, buffer = cv2.imencode('.jpg', outputFrame)
-        else:
-            ret, buffer = cv2.imencode('.jpg', np.zeros(frameShapes[id], np.uint8))
-        frame_ready = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_ready + b'\r\n')  # concat frame one by one and show result
-        time.sleep(1 / 60)  # Sleep 1/(FPS * 2)
-
-
-@app.route('/')
-def index_route():
-    """Video streaming home page."""
-    return render_template('indexv4.html', len=len(app.config['camera_ids']), camaraIDs=app.config['camera_ids'])
-
-
-BaseManager.register("socket_manager", SocketIOProcess)
-
-
-def get_manager():
-    m = BaseManager()
-    m.start()
-    return m
-
-
-if __name__ == '__main__':
-    config = load_config()
-
-    app.config.from_mapping(config)
-
-    # Initialize Socket Manager.
-    manager = get_manager()
-    socketManager = manager.socket_manager(config)
-
-    # TODO change into a wait
-    # Wait till Camaras Info Received.
-    while not socketManager.get_camera_info():
-        pass
-
-    per_camera_info = socketManager.get_camera_info()
-
-    for index, camara in enumerate(per_camera_info):
-        cap = cv2.VideoCapture(camara["source"])
-        ret, frame = cap.read()
-        frame = imutils.resize(frame, width=500)
-        frameShapes.append(frame.shape)
-        cap.release()
-
-        inputFrames.append(
-            Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
-        outputFrames.append(
-            Array(ctypes.c_uint8, frameShapes[-1][0] * frameShapes[-1][1] * frameShapes[-1][2], lock=False))
-        flags.append(Value(ctypes.c_bool, False))
-        processReference.append(Process(target=CamaraProcessing, args=(
-            index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"],
-            camara["last_record"][0], inputFrames[-1], outputFrames[-1], frameShapes[-1], flags[-1], socketManager,
-            config)))
-        processReference[-1].start()
-
-        sources.append(camara["source"])
-
-    readProcessRef = Process(target=CamaraRead, args=(sources, inputFrames, frameShapes, flags, config))
-    readProcessRef.start()
-
-    # TODO don't use waitress directly, this should expose a flask API to use with any server
-    from waitress import serve
-
-    app.debug = True
-    app.use_reloader = False
-    serve(app, host="0.0.0.0", port=8080)
-    print("Server 0.0.0.0:8080")
-    socketManager.wait()
