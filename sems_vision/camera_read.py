@@ -6,6 +6,8 @@ import cv2
 import imutils
 from queue import Queue
 
+from typing import Dict
+
 from sems_vision.frame_store import FrameStore
 
 
@@ -13,7 +15,7 @@ class CamaraRead:
     MAX_FPS = 34
     MAX_SKIP = 3
 
-    def __init__(self, sources, frame_store: FrameStore, frame_ready_events: dict[int, Event], config):
+    def __init__(self, sources, frame_store: FrameStore, frame_ready_events: Dict[int, Event], config):
         self.sources = sources
         self.frame_store = frame_store
         self.frame_ready_events = frame_ready_events

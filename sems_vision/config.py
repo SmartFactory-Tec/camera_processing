@@ -1,7 +1,6 @@
 import os
+from typing import MutableMapping
 import toml
-
-from collections.abc import MutableMapping
 from pathlib import Path
 
 # Resolve default configuration folder
@@ -13,7 +12,7 @@ else:
     CONFIG_PATH = os.environ["XDG_CONFIG_HOME"] \
         if "XDG_CONFIG_HOME" in os.environ \
         else os.path.join(HOME_PATH,
-                                                                                                     '.config')
+                          '.config')
     CONFIG_PATH = os.path.join(CONFIG_PATH, 'sems-vision')
 
 CONFIG_FILE = os.path.join(CONFIG_PATH, "config.toml")

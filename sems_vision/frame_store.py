@@ -1,13 +1,14 @@
 from multiprocessing.shared_memory import SharedMemory
 import numpy as np
+from typing import Dict
 
 
 class FrameStore:
     MEMORY_PREFIX = 'SEMS_VISION_'
 
     def __init__(self):
-        self.frame_shapes: dict[str, tuple] = {}
-        self.frame_dtypes: dict[str, np.dtype] = {}
+        self.frame_shapes: Dict[str, tuple] = {}
+        self.frame_dtypes: Dict[str, np.dtype] = {}
 
     def _create_shared_ndarray(self, mem_name, shape: tuple, dtype: np.dtype) -> np.ndarray:
         if mem_name in self.frame_shapes or mem_name in self.frame_dtypes:

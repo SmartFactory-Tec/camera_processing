@@ -78,10 +78,7 @@ RUN rm -rf /opencv_contrib-${OPENCV}/modules
 
 # Copy sems-vision project
 WORKDIR /sems-vision
-COPY sems_vision sems_vision
-COPY models models
-COPY static static
-COPY templates templates
+
 COPY Pipfile Pipfile
 COPY Pipfile.lock Pipfile.lock
 
@@ -90,6 +87,11 @@ RUN pipenv install --system --deploy --ignore-pipfile
 
 # Use gunicorn as the WSGI server
 RUN pip install gunicorn
+
+COPY sems_vision sems_vision
+COPY models models
+COPY static static
+COPY templates templates
 
 # Run gunicorn
 ENTRYPOINT ["gunicorn", "-w", "1", "-b", "0.0.0.0:3000","sems_vision:create_app()"]

@@ -1,4 +1,7 @@
 from multiprocessing import Process, Event
+
+from typing import List, Dict
+
 from sems_vision.camera_processing import CamaraProcessing
 from sems_vision.camera_read import CamaraRead
 from flask import Flask
@@ -24,9 +27,9 @@ def create_app():
 
     backend_socket: SocketIOProcess = manager.SocketIOProcess(config)
     frame_store: FrameStore = manager.FrameStore()
-    process_handles: list[Process] = manager.list()
+    process_handles: List[Process] = manager.list()
     sources: list = manager.list()
-    frame_ready_events: dict[int, Event] = manager.dict()
+    frame_ready_events: Dict[int, Event] = manager.dict()
 
     # Wait till Camaras Info Received.
     while not backend_socket.get_camera_info():
