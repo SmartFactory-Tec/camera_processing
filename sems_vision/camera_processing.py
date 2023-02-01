@@ -1,5 +1,7 @@
 import math
 import os
+from multiprocessing import Event
+
 import cv2
 import time
 import threading
@@ -8,8 +10,10 @@ import numpy as np
 from imutils.video import FPS
 from scipy.spatial.distance import cdist
 
-from centroid_tracker import CentroidTracker
-from trackable_object import TrackableObject
+from sems_vision.centroid_tracker import CentroidTracker
+from sems_vision.frame_store import FrameStore
+from sems_vision.socket_io_process import SocketIOProcess
+from sems_vision.trackable_object import TrackableObject
 
 
 class CamaraProcessing:
@@ -28,16 +32,18 @@ class CamaraProcessing:
         CLASSES = [line.strip() for line in f.readlines()]
 
     # why is this init so damn long
-    def __init__(self, id, v_orientation, run_distance_violation, detect_just_left_side, last_record, input_frame,
-                 output_frame, frame_shape, flag, socket_manager, args):
-        self.id = id
+    def __init__(self, camera_id: int, v_orientation, run_distance_violation, detect_just_left_side, last_record,
+                 frame_store: FrameStore, frame_ready_event: Event, socket_manager: SocketIOProcess, config: dict):
+        self.camera_id = camera_id
         self.v_orientation = v_orientation
         self.run_distance_violation = run_distance_violation
         self.detect_just_left_side = detect_just_left_side
-        self.camera_id = "Camara" + str(self.id)
+        self.camera_id = self.camera_id
+        self.frame_store = frame_store
+        self.frame_ready_event = frame_ready_event
         self.socket_manager = socket_manager
-        self.socket_manager.set_camera_url(self.id)
-        self.args = args
+        self.socket_manager.set_camera_url(self.camera_id)
+        self.args = config
 
         # Load Model
         self.net = cv2.dnn.readNetFromDarknet('models/people/yolov3.cfg', 'models/people/yolov3.weights')
@@ -65,11 +71,6 @@ class CamaraProcessing:
         # People in Frame - Time Average
         self.people_in_frame_time_avg = 0
         self.people_in_frame_count = 0
-
-        # TODO this was a fix to using a local scope variable inside the process
-        # check if it can be scoped to the function, instead of as a member
-        # also check if it even works
-        self.frame = np.zeros(frame_shape)
 
         # Instantiate our centroid tracker, initialize a list to store
         # each of our dlib correlation trackers and a dictionary to
@@ -136,18 +137,13 @@ class CamaraProcessing:
         call_fps_thread = threading.Thread(target=self.call_fps, args=(), daemon=True)
         call_fps_thread.start()
 
-        # Start data post Thread
+        # Start frame post Thread
         self.overpass_post_condition = False
         call_post_thread = threading.Thread(target=self.call_post, args=(), daemon=True)
         call_post_thread.start()
 
-        # again doing this, why?
-        input_frame_2 = np.frombuffer(input_frame, dtype=np.uint8)
-        input_frame_2 = input_frame_2.reshape(frame_shape)
-        output_frame_2 = np.frombuffer(output_frame, dtype=np.uint8)
-        output_frame_2 = output_frame_2.reshape(frame_shape)
         try:
-            self.gen_frames(input_frame_2, output_frame_2, flag)
+            self.gen_frames()
         except KeyboardInterrupt:
             self.end_process()
 
@@ -158,7 +154,7 @@ class CamaraProcessing:
         # Sending Camara Data
         if self.data["counter"] != 0 or self.overpass_post_condition:
             self.overpass_post_condition = False
-            self.socket_manager.send_camera_data(self.id, self.data)
+            self.socket_manager.send_camera_data(self.camera_id, self.data)
 
     def call_fps(self):
         if self.fps is not None:
@@ -177,7 +173,7 @@ class CamaraProcessing:
     Function to get the social distance violations based on the position
     of the centroids detected in the frame.
 
-    @objects (array): centroids (tuple) for every detected object.
+    @objects (frame): centroids (tuple) for every detected object.
     @return (set)		: coordinates of the centroids that violate
                                         social distancing.
 
@@ -246,7 +242,7 @@ class CamaraProcessing:
             return centroid[0] < self.W // 2
         return True
 
-    def gen_frames(self, input_frame, output_frame, flag):
+    def gen_frames(self):
         # Loop over frames from the video stream.
 
         while True:
@@ -255,17 +251,17 @@ class CamaraProcessing:
 
             # TODO wastes CPU time, rework with waits
             # Grab the next frame if available.
-            while not flag.value:
-                pass
-            flag.value = False
-            self.frame[:] = input_frame
+            self.frame_ready_event.wait()
+            self.frame_ready_event.clear()
+
+            input_frame = self.frame_store.get_input_frame_ref(self.camera_id)
 
             # Convert the frame from BGR to RGB for dlib.
-            rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+            rgb = cv2.cvtColor(input_frame, cv2.COLOR_BGR2RGB)
 
             # if the frame dimensions are empty, set them
             if self.W is None or self.H is None:
-                (self.H, self.W) = self.frame.shape[:2]
+                (self.H, self.W) = input_frame.shape[:2]
 
             # initialize the current status along with our list of bounding
             # box rectangles returned by either (1) our object detector or
@@ -307,7 +303,7 @@ class CamaraProcessing:
                         # filter out weak detections by requiring a minimum
                         # confidence
                         if confidence > self.args["confidence"] and self.is_in_valid_area(boxes[i]):
-                            # extract the index of the class label from the
+                            # extract the frame_id of the class label from the
                             # detections list
                             idx = int(classids[i])
 
@@ -353,16 +349,20 @@ class CamaraProcessing:
                     # add the bounding box coordinates to the rectangles list
                     rects.append((startX, startY, endX, endY))
 
+            output_frame = self.frame_store.get_output_frame_ref()
+
+            np.copyto(output_frame, input_frame)
+
             # draw a horizontal line in the center of the frame -- once an
             # object crosses this line we will determine whether they were
             # moving 'up' or 'down'
             if self.v_orientation:
-                cv2.line(self.frame, (self.W // 2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
+                cv2.line(output_frame, (self.W // 2, 0), (self.W // 2, self.H), (255, 0, 0), 2)
             else:
                 if self.detect_just_left_side:
-                    cv2.line(self.frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
+                    cv2.line(output_frame, (0, self.H // 2), (self.W // 2, self.H // 2), (255, 0, 0), 2)
                 else:
-                    cv2.line(self.frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
+                    cv2.line(output_frame, (0, self.H // 2), (self.W, self.H // 2), (255, 0, 0), 2)
 
             # use the centroid tracker to associate the (1) old object
             # centroids with (2) the newly computed object centroids
@@ -405,11 +405,11 @@ class CamaraProcessing:
                     self.distance_violation_count += 1
                     color = self.COLOR_RED
 
-                cv2.rectangle(self.frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
-                cv2.putText(self.frame, text, (x_start + 5, y_start + 10),
+                cv2.rectangle(output_frame, (x_start, y_start), (x_start + 40, y_start + 15), color, -1)
+                cv2.putText(output_frame, text, (x_start + 5, y_start + 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.4, self.COLOR_BLACK, 1)
-                cv2.circle(self.frame, (centroid[0], centroid[1]), 4, color, -1)
-                cv2.rectangle(self.frame, (x_start, y_start), (x_end, y_end), color, 1)
+                cv2.circle(output_frame, (centroid[0], centroid[1]), 4, color, -1)
+                cv2.rectangle(output_frame, (x_start, y_start), (x_end, y_end), color, 1)
 
             self.data = {
                 "in_direction": self.total_going_in,
@@ -420,12 +420,9 @@ class CamaraProcessing:
                 "fps": int(self.fps),
             }
 
-            # Publish frame.
-            output_frame[:] = self.frame
-
             # Show the output frame.
             if self.args["verbose"]:
-                cv2.imshow("Frame", self.frame)
+                cv2.imshow("Frame", output_frame)
                 key = cv2.waitKey(1) & 0xFF
 
                 # if the `q` key was pressed, break from the loop

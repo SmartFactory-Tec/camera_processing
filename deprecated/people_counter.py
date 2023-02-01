@@ -96,7 +96,7 @@ while True:
 		break
 
 	# resize the frame to have a maximum width of 500 pixels (the
-	# less data we have, the faster we can process it), then convert
+	# less frame we have, the faster we can process it), then convert
 	# the frame from BGR to RGB for dlib
 	frame = imutils.resize(frame, width=500)
 	rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -140,7 +140,7 @@ while True:
 			# filter out weak detections by requiring a minimum
 			# confidence
 			if confidence > args["confidence"]:
-				# extract the index of the class label from the
+				# extract the frame_id of the class label from the
 				# detections list
 				idx = int(detections[0, 0, i, 1])
 

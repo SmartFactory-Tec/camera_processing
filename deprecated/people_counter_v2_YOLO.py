@@ -35,7 +35,7 @@ last_frames = deque( maxlen=120 )
 # defining the api-endpoint  
 API_ENDPOINT = "https://prod-64.westus.logic.azure.com:443/workflows/ff179f5e08284d08b4fcb35a025443a0/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=g9033T7EODjg-A4GivUtOxNsLj08gWHomND-ALQXX1g"
 
-# data to be sent to api 
+# frame to be sent to api
 data = {
 	"cantidad" : 0,
 	"lugar" : "Camara 0"
@@ -188,7 +188,7 @@ def gen_frames():
 			break
 
 		# resize the frame to have a maximum width of 500 pixels (the
-		# less data we have, the faster we can process it), then convert
+		# less frame we have, the faster we can process it), then convert
 		# the frame from BGR to RGB for dlib
 		frame = imutils.resize(frame, width=500)
 		rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -241,7 +241,7 @@ def gen_frames():
 					# filter out weak detections by requiring a minimum
 					# confidence
 					if confidence > CONFIDENCE_:
-						# extract the index of the class label from the
+						# extract the frame_id of the class label from the
 						# detections list
 						idx = int(classids[i])
 

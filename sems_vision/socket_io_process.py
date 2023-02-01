@@ -1,14 +1,13 @@
-import socket
-
 import socketio
+from socket import getfqdn
 
 
 class SocketIOProcess:
     sio = socketio.Client()
 
-    def __init__(self, args):
-        self.args = args
-        self.camera_ids = self.args["camera_ids"]
+    def __init__(self, config):
+        self.config = config
+        self.camera_ids = config['camera_ids']
         self.camera_count = len(self.camera_ids)
         self.per_camera_info = []
         self.is_connected = False
@@ -17,7 +16,7 @@ class SocketIOProcess:
         self.sio.on('connect', self.connect)
         self.sio.on('disconnect', self.disconnect)
         self.sio.on('visionInit', self.init_vision)
-        self.sio.connect(self.args["back_endpoint"])
+        self.sio.connect(config["back_endpoint"])
 
     def connect(self):
         print('Connected')
@@ -38,6 +37,7 @@ class SocketIOProcess:
         self.has_camera_info = True
         print('CamaraInfo ', per_camera_info)
 
+    # TODO more robustly define what "camera info" is
     def get_camera_info(self, camera_id=None):
         if not self.has_camera_info:
             return False
@@ -49,6 +49,7 @@ class SocketIOProcess:
 
     def send_camera_data(self, camera_id, data):
         if self.is_connected:
+            # TODO emits type warning
             self.sio.emit('visionPost', data=(
                 self.per_camera_info[camera_id]['camera_id'],
                 data["in_direction"],
@@ -61,13 +62,15 @@ class SocketIOProcess:
 
     def set_camera_url(self, camera_id):
         if self.is_connected:
-            if self.args["ngrok_available"] and self.args["forward_camera"]:
+            # TODO don't hardcode this and eliminate "ngrok_available" config
+            if self.config["ngrok_available"] and self.config["forward_camera"]:
                 endpoint = 'http://sems.ngrok.io/camara/'
-            elif self.args["forward_camera"]:
-                endpoint = 'http://' + socket.getfqdn() + ':8080/camara/'
+            elif self.config["forward_camera"]:
+                endpoint = 'http://' + getfqdn() + ':8080/camara/'
             else:
                 endpoint = ''
 
+            # TODO this emits a type warning
             self.sio.emit('updateCamara', data=(
                 self.per_camera_info[camera_id]['camera_id'],
                 endpoint + str(camera_id)

@@ -1,4 +1,3 @@
-# import the necessary packages
 from scipy.spatial import distance as dist
 from collections import OrderedDict
 import types
@@ -67,7 +66,7 @@ class CentroidTracker:
             # to update
             return self.objects
 
-        # initialize an array of input centroids for the current frame
+        # initialize an frame of input centroids for the current frame
         input_centroids = np.zeros((len(rects), 2), dtype="int")
 
         # loop over the bounding box rectangles
@@ -100,13 +99,13 @@ class CentroidTracker:
             # in order to perform this matching we must (1) find the
             # smallest value in each row and then (2) sort the row
             # indexes based on their minimum values so that the row
-            # with the smallest value as at the *front* of the index
+            # with the smallest value as at the *front* of the frame_id
             # list
             rows = D.min(axis=1).argsort()
 
             # next, we perform a similar process on the columns by
             # finding the smallest value in each column and then
-            # sorting using the previously computed row index list
+            # sorting using the previously computed row frame_id list
             cols = D.argmin(axis=1)[rows]
 
             # in order to determine if we need to update, register,
@@ -115,7 +114,7 @@ class CentroidTracker:
             used_rows = set()
             used_cols = set()
 
-            # loop over the combination of the (row, column) index
+            # loop over the combination of the (row, column) frame_id
             # tuples
             for (row, col) in zip(rows, cols):
                 # if we have already examined either the row or
@@ -142,7 +141,7 @@ class CentroidTracker:
                 used_rows.add(row)
                 used_cols.add(col)
 
-            # compute both the row and column index we have NOT yet
+            # compute both the row and column frame_id we have NOT yet
             # examined
             unused_rows = set(range(0, D.shape[0])).difference(used_rows)
             unused_cols = set(range(0, D.shape[1])).difference(used_cols)
@@ -155,7 +154,7 @@ class CentroidTracker:
                 # loop over the unused row indexes
                 for row in unused_rows:
                     # grab the object ID for the corresponding row
-                    # index and increment the disappeared counter
+                    # frame_id and increment the disappeared counter
                     object_id = object_ids[row]
                     self.disappeared[object_id] += 1
 

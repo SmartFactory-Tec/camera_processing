@@ -1,14 +1,14 @@
-from multiprocessing import Process, Array, Value
-from sems_vision.sems_manager import SemsManager
+from multiprocessing import Process, Event
 from sems_vision.camera_processing import CamaraProcessing
 from sems_vision.camera_read import CamaraRead
-from flask import Flask, render_template, Response
-import numpy as np
+from flask import Flask
 import imutils
-import time
 import cv2
-import ctypes
-from config import load_config
+from sems_vision.config import load_config
+from sems_vision.frame_store import FrameStore
+from sems_vision.shared_state import SemsStateManager
+from sems_vision.socket_io_process import SocketIOProcess
+from sems_vision.camera import construct_camera_blueprint
 
 
 def create_app():
@@ -18,64 +18,57 @@ def create_app():
 
     app.config.from_mapping(config)
 
-    # Initialize shared sems state anager.
-    manager = SemsManager()
+    manager = SemsStateManager()
 
     manager.start()
 
-    # TODO check if using shared state instead of global variables works
-    socket_manager = manager.SocketIOProcess(config)
-    process_reference = manager.dict()
-    sources = manager.dict()
-    frame_shapes = manager.dict()
-    input_frames = manager.dict()
-    output_frames = manager.dict()
-    flags = manager.dict()
+    backend_socket: SocketIOProcess = manager.SocketIOProcess(config)
+    frame_store: FrameStore = manager.FrameStore()
+    process_handles: list[Process] = manager.list()
+    sources: list = manager.list()
+    frame_ready_events: dict[int, Event] = manager.dict()
 
-    # TODO change into a wait
     # Wait till Camaras Info Received.
-    while not socket_manager.get_camera_info():
+    while not backend_socket.get_camera_info():
         pass
 
-    per_camera_info = socket_manager.get_camera_info()
+    per_camera_info = backend_socket.get_camera_info()
 
-    for index, camara in enumerate(per_camera_info):
-        # TODO is doing all of this just to get the frame shape necessary?
-        cap = cv2.VideoCapture(camara["source"])
+    for index, camera in enumerate(per_camera_info):
+        cap = cv2.VideoCapture(camera["source"])
         ret, frame = cap.read()
         frame = imutils.resize(frame, width=500)
-        frame_shapes.append(frame.shape)
+
+        shape = frame.shape
+        dtype = frame.dtype
+
         cap.release()
 
-        input_frames.append(
-            Array(ctypes.c_uint8, frame_shapes[-1][0] * frame_shapes[-1][1] * frame_shapes[-1][2], lock=False))
-        output_frames.append(
-            Array(ctypes.c_uint8, frame_shapes[-1][0] * frame_shapes[-1][1] * frame_shapes[-1][2], lock=False))
-        flags.append(Value(ctypes.c_bool, False))
-        process_reference.append(Process(target=CamaraProcessing, args=(
-            index, camara["v_orientation"], camara["run_distance_violation"], camara["detect_just_left_side"],
-            camara["last_record"][0], input_frames[-1], output_frames[-1], frame_shapes[-1], flags[-1], socket_manager,
-            config)))
-        process_reference[-1].start()
+        frame_store.register_input_frame(index, shape, dtype)
+        frame_store.register_output_frame(index, shape, dtype)
 
-        sources.append(camara["source"])
+        frame_ready_events[index] = Event()
 
-    read_process_ref = Process(target=CamaraRead, args=(sources, input_frames, frame_shapes, flags, config))
+        process_args = (
+            index, camera['v_orientation'], camera['run_distance_violation'], camera['detect_just_left_side'],
+            camera['last_record'][0], frame_store, frame_ready_events[index], backend_socket, config)
+
+        process = Process(target=CamaraProcessing, args=process_args)
+
+        process_handles.append(process)
+        process.start()
+
+        sources.append(camera["source"])
+
+    process_args = (sources, frame_store, frame_ready_events, config)
+    read_process_ref = Process(target=CamaraRead, args=process_args)
     read_process_ref.start()
 
+    camera_bp = construct_camera_blueprint(frame_store)
+
+    from sems_vision.index import bp as index_bp
+
+    app.register_blueprint(index_bp)
+    app.register_blueprint(camera_bp)
+
     return app
-
-
-
-
-# if __name__ == '__main__':
-#
-#
-#     # TODO don't use waitress directly, this should expose a flask API to use with any server
-#     from waitress import serve
-#
-#     app.debug = True
-#     app.use_reloader = False
-#     serve(app, host="0.0.0.0", port=8080)
-#     print("Server 0.0.0.0:8080")
-#     socket_manager.wait()

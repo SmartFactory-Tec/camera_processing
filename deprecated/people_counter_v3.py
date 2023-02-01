@@ -158,7 +158,7 @@ class Camara:
 	Function to get the social distance violations based on the position
 	of the centroids detected in the frame.
 
-	@objects (array): centroids (tuple) for every detected object.
+	@objects (frame): centroids (tuple) for every detected object.
 	@return (set)		: coordinates of the centroids that violate
 										social distancing.
 
@@ -234,7 +234,7 @@ class Camara:
 				break
 
 			# Resize the frame to have a maximum width of 500 pixels (the
-			# less data we have, the faster we can process it), then convert
+			# less frame we have, the faster we can process it), then convert
 			# the frame from BGR to RGB for dlib.
 			frame = imutils.resize(frame, width=500)
 			rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -287,7 +287,7 @@ class Camara:
 						# filter out weak detections by requiring a minimum
 						# confidence
 						if confidence > args["confidence"]:
-							# extract the index of the class label from the
+							# extract the frame_id of the class label from the
 							# detections list
 							idx = int(classids[i])
 

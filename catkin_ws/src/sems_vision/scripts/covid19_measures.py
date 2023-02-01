@@ -159,7 +159,7 @@ class CamaraProcessing:
         img.format = "jpeg"
         img.data = np.array(cv2.imencode('.jpg', self.cv_image_rgb_processed)[1]).tostring()
         
-        # Publish data.
+        # Publish frame.
         self.publisherImage.publish(img)
         self.publisherPeople.publish(len(self.persons))
         self.publisherDistanceViolations.publish(self.distanceviolations)
