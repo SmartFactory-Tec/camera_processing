@@ -80,9 +80,9 @@ widgetsnbextension = "~=3.5"
 zipp = "~=3.3"
 toml = "*"
 python-socketio = {extras = ["client"], version = "*"}
+opencv-python = "*"
 
 [dev-packages]
 
 [requires]
-python_version = "~=3.8"
-python_full_version = "~=3.8.11"
+python_version = "3.10"

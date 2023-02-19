@@ -3,6 +3,16 @@ import cv2
 import numpy as np
 from flask import Blueprint, Response, current_app
 from sems_vision.frame_store import FrameStore
+from dataclasses import dataclass
+
+
+@dataclass
+class Camera:
+    id: int
+    name: str
+    connection_string: str
+    location_text: str
+    location_id: str
 
 
 def construct_camera_blueprint(frame_store: FrameStore) -> Blueprint:
