@@ -81,6 +81,9 @@ zipp = "~=3.3"
 toml = "*"
 python-socketio = {extras = ["client"], version = "*"}
 opencv-python = "*"
+structlog = "*"
+rich = "*"
+dacite = "*"
 
 [dev-packages]
 

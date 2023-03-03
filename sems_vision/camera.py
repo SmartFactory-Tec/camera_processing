@@ -2,7 +2,6 @@ import time
 import cv2
 import numpy as np
 from flask import Blueprint, Response, current_app
-from sems_vision.frame_store import FrameStore
 from dataclasses import dataclass
 
 
@@ -12,10 +11,10 @@ class Camera:
     name: str
     connection_string: str
     location_text: str
-    location_id: str
+    location_id: int
 
 
-def construct_camera_blueprint(frame_store: FrameStore) -> Blueprint:
+def construct_camera_blueprint(frame_store) -> Blueprint:
     bp = Blueprint('camera', __name__, url_prefix='/camera')
 
     @bp.route('/<id>')
@@ -30,7 +29,7 @@ def construct_camera_blueprint(frame_store: FrameStore) -> Blueprint:
             if current_app.config['forward_camera']:
                 ret, buffer = cv2.imencode('.jpg', output_frame)
             else:
-                ret, buffer = cv2.imencode('.jpg', np.zeros(output_frame.shape, output_frame.dtype))
+                ret, buffer = cv2.imencode('.jpg', np.zeros(output_frame.shape, output_frame._dtype))
 
             encoded_frame = buffer.tobytes()
             yield (b'--frame\r\n'

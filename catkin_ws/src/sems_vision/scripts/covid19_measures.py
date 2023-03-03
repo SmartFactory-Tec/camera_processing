@@ -127,7 +127,7 @@ class CamaraProcessing:
     
     def callFps(self):	
         if self.fps != None:
-            self.fps.stop()
+            self.fps.shutdown()
             print("[INFO] elapsed time: {:.2f}".format(self.fps.elapsed()))
             print("[INFO] approx. FPS: {:.2f}".format(self.fps.fps()))
             self.fpsValue = self.fps.fps()
@@ -230,8 +230,8 @@ class CamaraProcessing:
 
             def track_people(self):
                 for person in self.persons:
-                    person.tracker.update(cv_image_dlib)
-                    pos = person.tracker.get_position()
+                    person._tracker.update(cv_image_dlib)
+                    pos = person._tracker.get_position()
 
                     startX = int(pos.left())
                     startY = int(pos.top())

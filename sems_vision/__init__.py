@@ -2,13 +2,11 @@ from multiprocessing import Process, Event
 
 from typing import List, Dict
 
-from sems_vision.camera_processing import CamaraProcessing
-from sems_vision.camera_read import CamaraRead
+from sems_vision.frame_processors import CamaraProcessing
 from flask import Flask
 import imutils
 import cv2
 from sems_vision.config import load_config
-from sems_vision.frame_store import FrameStore
 from sems_vision.shared_state import SemsStateManager
 from sems_vision.socket_io_process import SocketIOProcess
 from sems_vision.camera import construct_camera_blueprint
@@ -26,7 +24,7 @@ def create_app():
     manager.start()
 
     backend_socket: SocketIOProcess = manager.SocketIOProcess(config)
-    frame_store: FrameStore = manager.FrameStore()
+    frame_store = manager.FrameStore()
     process_handles: List[Process] = manager.list()
     sources: list = manager.list()
     frame_ready_events: Dict[int, Event] = manager.dict()
@@ -43,7 +41,7 @@ def create_app():
         frame = imutils.resize(frame, width=500)
 
         shape = frame.shape
-        dtype = frame.dtype
+        dtype = frame._dtype
 
         cap.release()
 

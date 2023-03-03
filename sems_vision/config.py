@@ -18,9 +18,11 @@ else:
 CONFIG_FILE = os.path.join(CONFIG_PATH, "config.toml")
 
 DEFAULT_CONFIG = {
-    'camera_ids': [8],
-    'back_endpoint': 'http://localhost:3000',
-    'ngrok_available': False,
+    'camera_service': {
+        'hostname': 'localhost',
+        'port': 3000,
+        'use_https': False,
+    },
     'gpu_available': False,
     'forward_camera': False,
     'verbose': False,
