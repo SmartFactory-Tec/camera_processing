@@ -1,4 +1,0 @@
-<launch>
-    <node name="Covid19Measures" pkg="sems_vision" type="covid19_measures.py" respawn="true" output="screen"/>
-    <include file="$(find zed_wrapper)/launch/zed2.launch" />
-</launch>

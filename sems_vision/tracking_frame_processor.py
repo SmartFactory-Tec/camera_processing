@@ -5,7 +5,7 @@ from sems_vision.detection import Detection
 from sems_vision.frame_packet import FramePacketGenerator
 
 
-class CorrelationTrackingFrameProcessor:
+class TrackingFrameProcessor:
     def __init__(self):
         self.frame_shape: tuple[int, int] | None = None
         self.trackers: list[dlib.correlation_tracker] = []

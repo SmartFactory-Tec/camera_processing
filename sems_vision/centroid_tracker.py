@@ -1,4 +1,3 @@
-import types
 from math import floor
 
 import numpy as np
@@ -8,7 +7,7 @@ from scipy.spatial import distance as dist
 from collections import OrderedDict
 from collections.abc import Callable
 
-from sems_vision.detection import BoundingBox, Detection
+from sems_vision.detection import Detection
 
 
 @dataclass

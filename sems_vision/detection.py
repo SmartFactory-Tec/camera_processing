@@ -1,10 +1,4 @@
-import numpy as np
-
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
-from typing import Generator, Type
-
-from sems_vision.frame_packet import FramePacket
+from dataclasses import dataclass
 
 BoundingBox = tuple[int, int, int, int]
 
