@@ -3,6 +3,11 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[[source]]
+url = "https://download.pytorch.org/whl/cu118"
+verify_ssl = true
+name = "downloadpytorch"
+
 [packages]
 argon2-cffi = "~=20.1"
 async-generator = "~=1.10"
@@ -80,10 +85,13 @@ widgetsnbextension = "~=3.5"
 zipp = "~=3.3"
 toml = "*"
 python-socketio = {extras = ["client"], version = "*"}
-opencv-python = "*"
-structlog = "*"
-rich = "*"
-dacite = "*"
+structlog = "~=23.1"
+rich = "~=13.3"
+dacite = "~=1.8"
+aiohttp = "~=3.8"
+aiortc = "~=1.5"
+av = "~=9.0.0"
+torch = {version = "==2.0.0+cu118", index = "downloadpytorch"}
 
 [dev-packages]
 

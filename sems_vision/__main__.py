@@ -1,8 +1,17 @@
 import signal
 from multiprocessing import Process, Event
 
-from sems_vision import load_config, CameraService, CentroidTrackingFrameProcessor, imshow_pipeline_executor, get_logger, TrackingFrameProcessor, DetectingFrameProcessor, Camera
+import aiohttp
+
+from sems_vision import load_config, CameraService, CentroidTrackingFrameProcessor, imshow_pipeline_executor, \
+    get_logger, TrackingFrameProcessor, YoloV3DetectingProcessor, Camera
 from sems_vision.multiprocess_frame_srcs import MultiprocessFrameSrcs
+from dataclasses import dataclass
+
+
+
+
+
 
 logger = get_logger()
 
@@ -23,7 +32,7 @@ process_handles: list[Process] = []
 with MultiprocessFrameSrcs(cameras) as frame_srcs:
     for camera in cameras:
         src = frame_srcs.frame_src(camera.id)
-        detector = DetectingFrameProcessor(0.6, 0.1)
+        detector = YoloV3DetectingProcessor(0.6, 0.1)
         tracker = TrackingFrameProcessor()
         centroidTracker = CentroidTrackingFrameProcessor()
 

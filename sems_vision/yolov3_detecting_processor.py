@@ -1,3 +1,5 @@
+from math import floor
+
 import cv2
 import numpy as np
 
@@ -5,7 +7,7 @@ from sems_vision.frame_packet import FramePacketGenerator
 from sems_vision.detection import Detection, BoundingBox
 
 
-class DetectingFrameProcessor:
+class YoloV3DetectingProcessor:
     PERSON_CLASS_ID = 0
 
     def __init__(self, confidence_threshold: float, nms_threshold: float):
@@ -15,9 +17,7 @@ class DetectingFrameProcessor:
 
         self.nms_threshold = nms_threshold
 
-        self._layer_names = self._net.getLayerNames()
         self._output_layer_names = self._net.getUnconnectedOutLayersNames()
-        # self._layer_names = [self._layer_names[i[0] - 1] for i in self._net.getUnconnectedOutLayers()]
 
         self.confidence_threshold = confidence_threshold
 
@@ -31,10 +31,15 @@ class DetectingFrameProcessor:
 
             frame = packet.frame
             frame_shape = frame.shape
+            resize_factor = 300 / frame.shape[0]
+            scaled_frame = cv2.resize(frame, (floor(frame.shape[0] * resize_factor), floor(frame.shape[1] * resize_factor)), interpolation=cv2.INTER_AREA)
+            scaled_shape = scaled_frame.shape
+
 
             detections: list[Detection] = []
 
-            blob = cv2.dnn.blobFromImage(frame, 1 / 255.0, (416, 416), swapRB=True, crop=False)
+            blob = cv2.dnn.blobFromImage(scaled_frame, 1 / 255.0, scaled_shape, swapRB=True, crop=False)
+
             self._net.setInput(blob)
 
             network_out = self._net.forward(self._output_layer_names)
@@ -50,10 +55,10 @@ class DetectingFrameProcessor:
                     class_id = np.argmax(scores)
                     confidence = scores[class_id]
 
-                    if confidence > self.confidence_threshold and class_id == DetectingFrameProcessor.PERSON_CLASS_ID:
+                    if confidence > self.confidence_threshold and class_id == YoloV3DetectingProcessor.PERSON_CLASS_ID:
                         # compute the (x, y)-coordinates of the bounding box
                         # for the object
-                        box = np.array(detections[0:4]) * np.array(
+                        box = np.array(raw_detections[0:4]) * np.array(
                             [frame_shape[0], frame_shape[1], frame_shape[0], frame_shape[1]])
                         (center_x, center_y, width, height) = box.astype("int")
 
@@ -69,7 +74,7 @@ class DetectingFrameProcessor:
             # TODO check if its better to run this before or after removing all non person detections
             # filter detections via the Non Maximal Suppression algorithm
             filtered_detection_indices = cv2.dnn.NMSBoxes(bounding_boxes, confidences, self.confidence_threshold,
-                                         self.nms_threshold)
+                                                          self.nms_threshold)
 
             # transform them from x1 y1 w h to x1 y1 x2 y2
             bounding_boxes = [(bb[0], bb[1], bb[0] + bb[2], bb[1] + bb[3]) for bb in bounding_boxes]
