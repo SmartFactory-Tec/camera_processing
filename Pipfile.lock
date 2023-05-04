@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "c33ddf34cd410595825c916078c7517f38d2666e33ccc1e0425e59b9c844fcdd"
+            "sha256": "664ba42527b94a8d4f70e91e462204155d42c82770219f909879579d1c6a771f"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -1792,6 +1792,20 @@
             ],
             "index": "downloadpytorch",
             "version": "==2.0.0+cu118"
+        },
+        "torchvision": {
+            "hashes": [
+                "sha256:22fe045677a74afecf7cd2f4146dca93dc926f40d0a658aa1bed3275f87dc7de",
+                "sha256:4008dee965103030a196d385ca8d84a9c20fc52585f5753fc8360219a7a06c4e",
+                "sha256:473ea5fba33c0e8fc482cf70ced986521f2a3d79497b0bdaa435353ca8752e5e",
+                "sha256:5ece279c8f521f8f6373bf971f2adc63a961d694c4aced538df81294210ee4ba",
+                "sha256:9104730d655abf282c2845d4cd472bb08936f3c85083a28aefd76ad9eeaff261",
+                "sha256:9a679fa37a741018c804234693bbac3d487fb3dd55ee73f6b33677b177c8c07a",
+                "sha256:9ced2c90ee782bbb415b0de65bcc10d4fe811131864679b707442c9d9e8aaafd",
+                "sha256:9ff719de1c09f1825492e3e39f4e49c42782e559298529e4b47d3f1404c45d1f"
+            ],
+            "index": "downloadpytorch",
+            "version": "==0.15.1+cu118"
         },
         "tornado": {
             "hashes": [

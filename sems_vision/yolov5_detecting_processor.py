@@ -7,7 +7,7 @@ from sems_vision.detection import Detection, BoundingBox
 from pandas import DataFrame
 
 
-class YoloV3DetectingProcessor:
+class YoloV5DetectingProcessor:
     def __init__(self, confidence_threshold: float, nms_threshold: float, process_height: int | None = 300):
         self.__model = torch.hub.load('ultralytics/yolov5', 'yolov5n', pretrained=True)
 
@@ -31,12 +31,11 @@ class YoloV3DetectingProcessor:
             # resize if set to do so
             if self.__process_height is not None:
                 resize_factor = self.__process_height / frame.shape[0]
-                scaled_frame = cv2.resize(frame, (
-                    floor(frame.shape[0] * resize_factor), floor(frame.shape[1] * resize_factor)),
+                frame = cv2.resize(frame, (
+                    floor(frame.shape[1] * resize_factor), floor(frame.shape[0] * resize_factor)),
                                           interpolation=cv2.INTER_AREA)
-                frame = scaled_frame
 
-            detections_dataframe: DataFrame = self.__model([frame])
+            detections_dataframe: DataFrame = self.__model([frame]).pandas().xyxy
 
             bounding_boxes: list[BoundingBox] = []
             confidences: list[float] = []
@@ -54,7 +53,7 @@ class YoloV3DetectingProcessor:
                     w = [coord / resize_factor for coord in w]
                     h = [coord / resize_factor for coord in h]
 
-                bounding_boxes = zip(x, y, w, h)
+                bounding_boxes = list(zip(x, y, w, h))
                 confidences = people_detected['confidence'].tolist()
 
             # TODO check if its better to run this before or after removing all non person detections
@@ -63,7 +62,10 @@ class YoloV3DetectingProcessor:
                                                           self.nms_threshold)
 
             # transform them from x1 y1 w h to x1 y1 x2 y2
-            bounding_boxes = [(bb[0], bb[1], bb[0] + bb[2], bb[1] + bb[3]) for bb in bounding_boxes]
+            bounding_boxes = list([(bb[0], bb[1], bb[0] + bb[2], bb[1] + bb[3]) for bb in bounding_boxes])
+
+            for bounding_box in bounding_boxes:
+                cv2.rectangle(frame, (bounding_box[0], bounding_box[1]), (bounding_box[2], bounding_box[3]), (255, 0, 0))
 
             detections: list[Detection] = []
 

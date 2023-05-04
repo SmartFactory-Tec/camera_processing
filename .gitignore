@@ -280,3 +280,5 @@ poetry.toml
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,intellij+all
 
 models/people/yolov3.weights
+
+yolov5n.pt
