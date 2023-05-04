@@ -1,10 +1,9 @@
 import cv2
-import torch
 import numpy as np
 from math import floor
 from sems_vision.frame_packet import FramePacketGenerator
 from sems_vision.detection import Detection, BoundingBox
-from pandas import DataFrame
+import pandas as pd
 
 
 class YoloV5DetectingProcessor:
@@ -35,7 +34,7 @@ class YoloV5DetectingProcessor:
                     floor(frame.shape[1] * resize_factor), floor(frame.shape[0] * resize_factor)),
                                           interpolation=cv2.INTER_AREA)
 
-            detections_dataframe: DataFrame = self.__model([frame]).pandas().xyxy
+            detections_dataframe: pd.DataFram = self.__model([frame]).pandas().xyxy
 
             bounding_boxes: list[BoundingBox] = []
             confidences: list[float] = []

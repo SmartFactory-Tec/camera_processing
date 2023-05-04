@@ -1,6 +1,3 @@
-import time
-from math import floor
-from multiprocessing import Event
 from typing import Callable
 
 import cv2

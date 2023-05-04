@@ -1,7 +1,7 @@
 import cv2
 from camera_server_frame_src import camera_server_frame_src
 from sems_vision.executors import imshow_pipeline_executor
-from sems_vision.yolov5_detecting_processor import YoloV5DetectingProcessor
+from sems_vision.yolov8_detecting_processor import YoloV5DetectingProcessor
 
 
 def main():
