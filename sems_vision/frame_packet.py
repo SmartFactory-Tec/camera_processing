@@ -12,4 +12,5 @@ class FramePacket:
     timestamp: float = field(default_factory=time)
 
 
-FramePacketGenerator = Generator[FramePacket, FramePacket, None]
+FramePacketProcessor = Generator[FramePacket, FramePacket, None]
+FramePacketGenerator = Generator[FramePacket, None, None] | FramePacketProcessor

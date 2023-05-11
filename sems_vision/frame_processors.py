@@ -5,8 +5,42 @@ from collections import OrderedDict
 from time import time
 from scipy.spatial.distance import cdist
 
-from sems_vision.centroid_tracker import DetectionCentroidTracker, Centroid
+from sems_vision.centroid_tracker import Centroid
 from sems_vision.frame_packet import FramePacketGenerator
+
+
+def centroid_exit_direction_processor(source: FramePacketGenerator, centroids_key='centroids',
+                                      removed_centroids_key='removed_centroids',
+                                      left_exit_count_key='left_exit_count', right_exit_count_key='right_exit_count'):
+    entrypoints: dict[int, tuple[int, int]] = {}
+    for packet in source:
+        packet.values[left_exit_count_key] = 0
+        packet.values[right_exit_count_key] = 0
+
+        frame_shape = packet.frame.shape
+
+        midpoint = frame_shape[1] // 2
+
+        for centroid_id, centroid in packet.values[centroids_key].items():
+            if centroid_id not in entrypoints:
+                entrypoints[centroid_id] = centroid.pos
+
+        for centroid_id, centroid in packet.values[removed_centroids_key].items():
+            entrypoint = entrypoints[centroid_id]
+            exitpoint = centroid.pos
+
+            del entrypoints[centroid_id]
+
+            if entrypoint[0] >= midpoint >= exitpoint[0]:
+                packet.values[left_exit_count_key] += 1
+                print("Exited left!")
+            elif entrypoint[0] <= midpoint <= exitpoint[0]:
+                packet.values[right_exit_count_key] += 1
+                print("exited right!")
+            else:
+                print(f"exited from {entrypoint[0]} to {exitpoint[0]}")
+
+        yield packet
 
 
 def centroid_count_processor(source: FramePacketGenerator, centroids_key='centroids',
@@ -69,44 +103,3 @@ def process_social_distance_violations(social_distance_threshold: int, source: F
                         point_violations.add(centroid_ids[i])
                         point_violations.add(centroid_ids[j])
         yield packet
-
-
-class CentroidTrackingFrameProcessor:
-    """
-    CentroidTrackerFrameProcessor associates Detection objects to Centroid objects, maintaining an ID using the given
-    centroid object tracking algorithm
-    """
-
-    def __init__(self):
-        self.frame_shape: tuple[int, int] | None = None
-
-        self.people_in_frame_time_avg = 0
-        self.people_count = 0
-
-        self.total_exited_left = 0
-        self.total_exited_right = 0
-
-        self.social_distance_threshold = 20
-        self.do_distance_violation = True
-        self._removed_centroids: dict[int, Centroid] = {}
-
-        self._tracker = DetectionCentroidTracker(max_disappeared_frames=40, max_distance=50,
-                                                 on_centroid_removed=self._on_centroid_removed)
-
-    def process(self, source: FramePacketGenerator, detections_value_name='detections',
-                centroids_value_name='centroids', removed_centroids_value_name='removed_centroids'):
-        for packet in source:
-            frame = packet.frame
-
-            if self.frame_shape is None:
-                self.frame_shape = frame.shape[:2]
-
-            self._tracker.update(packet.values[detections_value_name])
-            packet.values[centroids_value_name] = self._tracker.centroids
-            packet.values[removed_centroids_value_name] = self._removed_centroids
-            self._removed_centroids = []
-
-            yield packet
-
-    def _on_centroid_removed(self, centroid_id: int, centroid: Centroid):
-        self._removed_centroids[centroid_id] = centroid

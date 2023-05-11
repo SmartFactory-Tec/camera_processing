@@ -281,4 +281,4 @@ poetry.toml
 
 models/people/yolov3.weights
 
-yolov5n.pt
+**.pt

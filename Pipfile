@@ -9,68 +9,33 @@ verify_ssl = true
 name = "downloadpytorch"
 
 [packages]
-imutils = "~=0.5"
-jsonschema = "~=3.2"
-kiwisolver = "~=1.2"
-markupsafe = "~=1.1"
-mistune = "~=0.8"
-mpmath = "~=1.1"
-nbclient = "~=0.5"
-nbconvert = "~=6.0"
-nbformat = "~=5.0"
-nest-asyncio = "~=1.4"
-nose = "~=1.3"
-notebook = "~=6.1"
+gitpython = "*"
+matplotlib = "*"
 numpy = "*"
-packaging = "~=20.4"
-cython = "*"
-pandocfilters = "~=1.4"
-parso = "~=0.7"
-pexpect = "~=4.8"
-pickleshare = "~=0.7"
-pillow = "*"
-prometheus-client = "~=0.8"
-prompt-toolkit = "~=3.0"
-ptyprocess = "~=0.6"
-pycparser = "~=2.20"
-pygments = "~=2.7"
-pyparsing = "~=2.4"
-pyrsistent = "~=0.17"
-python-dateutil = "~=2.8"
-python-dotenv = "~=0.15"
-qtconsole = "~=4.7"
-qtpy = "~=1.9"
+Pillow = "*"
+psutil = "*"
+PyYAML = "*"
 requests = "*"
 scipy = "*"
-six = "~=1.15"
-sympy = "~=1.6"
-terminado = "~=0.9"
-testpath = "~=0.4"
-tornado = "~=6.0"
-traitlets = "~=4.3"
-wcwidth = "~=0.2"
-webencodings = "~=0.5"
-widgetsnbextension = "~=3.5"
-zipp = "~=3.3"
-toml = "*"
-structlog = "~=23.1"
-rich = "~=13.3"
-dacite = "~=1.8"
-aiohttp = "~=3.8"
-aiortc = "~=1.5"
-av = "~=10.0.0"
+thop = "*"
+tqdm = "*"
+aiortc = "*"
+dlib = "*"
+pandas = "*"
 
-[cu118-packages]
-torch = {version = "==2.0.0+cu118", index = "downloadpytorch"}
-torchvision = {version = "==0.15.1+cu118", index = "downloadpytorch"}
-ultralytics = "*"
+[cu118-packages] # Packages that require cuda 11.8 installed
+torch = { version = "==2.0.0+cu118", index = "downloadpytorch" }
+torchvision = { version = "==0.15.1+cu118", index = "downloadpytorch" }
 
-[cpu-packages]
+[cpu-packages] # alternative to the cuda packages
 torch = "*"
 torchvision = "*"
-ultralytics = "*"
 
-[system-packages]
+[system-packages] # packages that can either be obtained from the system's package manager or with prebuilt wheels from pypi
 opencv-python = "*"
 
 [dev-packages]
+
+[scripts]
+install-cu118  = "sh -c 'pipenv install --categories \"packages cu118-packages\"; pip install --no-deps ultralytics'"
+install-cpu  = "sh -c 'pipenv install --categories \"packages cpu-packages\"; pip install --no-deps ultralytics'"

@@ -1,16 +1,22 @@
-import cv2
 from camera_server_frame_src import camera_server_frame_src
+from sems_vision import centroid_exit_direction_processor
 from sems_vision.executors import imshow_pipeline_executor
-from sems_vision.yolov8_detecting_processor import YoloV5DetectingProcessor
+from sems_vision.yolov8_detecting_processor import YoloV8DetectingProcessor
+from sems_vision.tracking_frame_processor import TrackingFrameProcessor
+from sems_vision.centroid_tracking_frame_processor import CentroidTrackingFrameProcessor
 
 
 def main():
     frame_src = camera_server_frame_src('10.22.244.185', 3002, 4)
 
-    detector = YoloV5DetectingProcessor(0.5, 0.5)
-    detecting_processor = detector.process(frame_src)
-
-    executor = imshow_pipeline_executor(detecting_processor)
+    detector = YoloV8DetectingProcessor(0.5, 0.5)
+    detecting_processor = detector.process(frame_src, skip_frames=30)
+    tracker = TrackingFrameProcessor()
+    tracking_processor = tracker.process(detecting_processor)
+    centroid_tracker = CentroidTrackingFrameProcessor()
+    centroid_processor = centroid_tracker.process(tracking_processor)
+    exit_processor = centroid_exit_direction_processor(centroid_processor)
+    executor = imshow_pipeline_executor(exit_processor)
 
     executor()
 

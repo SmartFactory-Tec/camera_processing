@@ -6,7 +6,6 @@ from sems_vision.detection import *
 from sems_vision.frame_processors import *
 from sems_vision.frame_packet import *
 from sems_vision.logger import *
-from sems_vision.socket_io_process import *
 from sems_vision.tracking_frame_processor import *
 from sems_vision.yolov3_detecting_processor import *
 from sems_vision.executors import *

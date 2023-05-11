@@ -3,8 +3,9 @@ from multiprocessing import Process, Event
 
 import aiohttp
 
-from sems_vision import load_config, CameraService, CentroidTrackingFrameProcessor, imshow_pipeline_executor, \
+from sems_vision import load_config, CameraService, imshow_pipeline_executor, \
     get_logger, TrackingFrameProcessor, YoloV3DetectingProcessor, Camera
+from sems_vision.centroid_tracking_frame_processor import CentroidTrackingFrameProcessor
 from sems_vision.multiprocess_frame_srcs import MultiprocessFrameSrcs
 from dataclasses import dataclass
 

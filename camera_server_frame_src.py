@@ -1,4 +1,4 @@
-import cv2
+import numpy as np
 import asyncio
 import json
 from typing import AsyncGenerator, Generator
@@ -6,7 +6,7 @@ import aiohttp
 from aioice import Candidate
 from aiortc import RTCPeerConnection, MediaStreamTrack, RTCSessionDescription, RTCConfiguration, RTCIceServer
 from aiortc.rtcicetransport import candidate_from_aioice
-
+from aiortc.mediastreams import MediaStreamError
 from sems_vision import FramePacket
 
 
@@ -98,9 +98,13 @@ async def async_camera_server_frame_src(hostname: str, port: int, camera_id: int
         await signaling_future
 
         while True:
-            frame = await track.recv()
-            img = frame.to_ndarray(format="bgr24")
-            yield FramePacket(img)
+            try:
+                frame = await track.recv()
+                img = frame.to_ndarray(format="bgr24")
+                yield FramePacket(img)
+            except MediaStreamError:
+                print("Unable to get frame from server")
+                yield FramePacket(np.zeros((500, 500)))
 
 
 def camera_server_frame_src(hostname: str, port: int, camera_id: int, use_https: bool = False) \

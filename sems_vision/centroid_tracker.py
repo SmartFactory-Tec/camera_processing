@@ -27,7 +27,7 @@ def detection_to_centroid(detection: Detection):
 
 class DetectionCentroidTracker:
     def __init__(self, max_disappeared_frames: int = 50, max_distance: float = 50,
-                 on_centroid_removed: Callable[[int], Centroid] | None = None):
+                 on_centroid_removed: Callable[[int, Centroid | None], None] | None = None):
         self._next_object_id = 0  # used to generate centroid ids
         self.centroids: OrderedDict[int, Centroid] = OrderedDict()
 
@@ -36,7 +36,7 @@ class DetectionCentroidTracker:
         self.max_distance: float = max_distance
 
         # callback function to call when a centroid is removed
-        self.remove_action: Callable[[int], Centroid] | None = on_centroid_removed
+        self.remove_action: Callable[int, Centroid] | None = on_centroid_removed
 
     def _handle_missing_centroid(self, centroid_id: int):
         centroid = self.centroids[centroid_id]
@@ -61,12 +61,15 @@ class DetectionCentroidTracker:
 
         # if there are no detections then all centroids are missing
         if len(detections) == 0:
-            for centroid_id, centroid in self.centroids:
+            # copy the keys so that we can mutate the map
+            centroid_ids = list(self.centroids.keys())
+            for centroid_id in centroid_ids:
                 self._handle_missing_centroid(centroid_id)
             return
 
         # convert the incoming detections into new centroids
-        new_centroids = list([detection_to_centroid(detection) for detection in detections])
+        new_centroids = list(detection_to_centroid(detection) for detection in detections)
+        new_centroids_pos = list(centroid.pos for centroid in new_centroids)
 
         # if we are currently not tracking any objects take the input
         # centroids and register each of them
@@ -80,10 +83,10 @@ class DetectionCentroidTracker:
 
         # list to convert from centroid list indices to their actual stored IDs
         centroid_ids = list(self.centroids.keys())
-        centroids = list(self.centroids.values())
+        centroids_pos = list(centroid.pos for centroid in self.centroids.values())
 
         # matrix that contains all the distances for each combination of old centroid and new centroid
-        distances = dist.cdist(np.array(centroids), np.array(new_centroids))
+        distances = dist.cdist(np.array(centroids_pos), np.array(new_centroids_pos))
 
         # obtain the old centroid's indices sorted by how close they are to a new centroid, to ensure that the matching
         # uses the closest pair possible
