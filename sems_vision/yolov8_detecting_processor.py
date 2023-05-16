@@ -16,7 +16,7 @@ class YoloV8DetectingProcessor:
 
         self.confidence_threshold = confidence_threshold
 
-    def process(self, source: FramePacketGenerator, skip_frames=4, detections_key='detections'):
+    def process(self, source: FramePacketGenerator, skip_frames=24, detections_key='detections'):
         frame_counter = 1
         for packet in source:
             frame_counter %= skip_frames
@@ -32,7 +32,7 @@ class YoloV8DetectingProcessor:
                 resize_factor = self.__process_height / frame.shape[0]
                 frame = cv2.resize(frame, (
                     floor(frame.shape[1] * resize_factor), floor(frame.shape[0] * resize_factor)),
-                                   interpolation=cv2.INTER_AREA)
+                                   interpolation=cv2.INTER_LINEAR)
 
             predictions = self.__model.predict(source=frame)[0].boxes
 
@@ -43,7 +43,8 @@ class YoloV8DetectingProcessor:
                 if prediction.cls.item() != 0:
                     continue
                 bb = prediction.xyxy[0]
-                bounding_boxes.append((bb[0].item(), bb[1].item(), bb[2].item(), bb[3].item()))
+                bounding_boxes.append(
+                    (floor(bb[0].item()), floor(bb[1].item()), floor(bb[2].item()), floor(bb[3].item())))
                 confidences.append(prediction.conf.item())
 
             if resize_factor is not None:
