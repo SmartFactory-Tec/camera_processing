@@ -1,3 +1,5 @@
+from typing import Optional, Union
+
 from math import floor
 
 import numpy as np
@@ -27,7 +29,7 @@ def detection_to_centroid(detection: Detection):
 
 class DetectionCentroidTracker:
     def __init__(self, max_disappeared_frames: int = 50, max_distance: float = 50,
-                 on_centroid_removed: Callable[[int, Centroid | None], None] | None = None):
+                 on_centroid_removed: Union[Callable[[int, Optional[Centroid]], None], None] = None):
         self._next_object_id = 0  # used to generate centroid ids
         self.centroids: OrderedDict[int, Centroid] = OrderedDict()
 
@@ -36,7 +38,7 @@ class DetectionCentroidTracker:
         self.max_distance: float = max_distance
 
         # callback function to call when a centroid is removed
-        self.remove_action: Callable[int, Centroid] | None = on_centroid_removed
+        self.remove_action: Optional[Callable[int, Centroid]] = on_centroid_removed
 
     def _handle_missing_centroid(self, centroid_id: int):
         centroid = self.centroids[centroid_id]

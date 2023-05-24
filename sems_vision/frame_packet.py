@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from time import time
-from typing import Any, Generator
-
+from typing import Any, Generator, Union
 import numpy as np
 
 
@@ -13,4 +12,4 @@ class FramePacket:
 
 
 FramePacketProcessor = Generator[FramePacket, FramePacket, None]
-FramePacketGenerator = Generator[FramePacket, None, None] | FramePacketProcessor
+FramePacketGenerator = Union[Generator[FramePacket, None, None], FramePacketProcessor]

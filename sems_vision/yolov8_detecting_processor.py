@@ -1,18 +1,19 @@
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from typing import Optional
 from math import floor
 from sems_vision.frame_packet import FramePacketGenerator
 from sems_vision.detection import Detection, BoundingBox
 
 
 class YoloV8DetectingProcessor:
-    def __init__(self, confidence_threshold: float, nms_threshold: float, process_height: int | None = 640):
+    def __init__(self, confidence_threshold: float, nms_threshold: float, process_height: Optional[int] = 640):
         self.__model = YOLO('yolov8n.pt')
 
-        self.__process_height: int | None = process_height
+        self.__process_height: Optional[int] = process_height
 
-        self.nms_threshold = nms_thresho6d
+        self.nms_threshold = nms_threshold
 
         self.confidence_threshold = confidence_threshold
 
@@ -25,7 +26,7 @@ class YoloV8DetectingProcessor:
             frame_counter += 1
 
             frame: np.ndarray = packet.frame
-            resize_factor: float | None = None
+            resize_factor: Optional[float] = None
 
             # resize if set to do so
             if self.__process_height is not None:

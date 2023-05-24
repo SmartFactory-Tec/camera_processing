@@ -22,14 +22,18 @@ tqdm = "*"
 aiortc = "*"
 dlib = "*"
 pandas = "*"
+structlog = "*"
+dacite = "*"
+toml = "*"
+aiohttp = "*"
 
 [cu118-packages] # Packages that require cuda 11.8 installed
-torch = { version = "==2.0.0+cu118", index = "downloadpytorch" }
-torchvision = { version = "==0.15.1+cu118", index = "downloadpytorch" }
+torch = { version = "==2.0.1+cu118", index = "downloadpytorch" }
+torchvision = { version = "==0.15.2+cu118", index = "downloadpytorch" }
 
 [cpu-packages] # alternative to the cuda packages
-torch = "*"
-torchvision = "*"
+torch = "==2.0.1"
+torchvision = "==0.15.2"
 
 [system-packages] # packages that can either be obtained from the system's package manager or with prebuilt wheels from pypi
 opencv-python = "*"
@@ -39,3 +43,6 @@ opencv-python = "*"
 [scripts]
 install-cu118  = "sh -c 'pipenv install --categories \"packages cu118-packages\"; pip install --no-deps ultralytics'"
 install-cpu  = "sh -c 'pipenv install --categories \"packages cpu-packages\"; pip install --no-deps ultralytics'"
+
+[requires]
+python_version = "3.9"
