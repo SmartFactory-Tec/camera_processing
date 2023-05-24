@@ -24,10 +24,6 @@ DEFAULT_CONFIG = {
         'use_https': False,
     },
     'gpu_available': False,
-    'forward_camera': False,
-    'verbose': False,
-    'confidence_threshold': 0.3,
-    'skip_frames': 25,
 }
 
 

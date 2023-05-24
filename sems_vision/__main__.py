@@ -1,18 +1,9 @@
 import signal
 from multiprocessing import Process, Event
-
-import aiohttp
-
 from sems_vision import load_config, CameraService, imshow_pipeline_executor, \
     get_logger, TrackingFrameProcessor, YoloV3DetectingProcessor, Camera
 from sems_vision.centroid_tracking_frame_processor import CentroidTrackingFrameProcessor
 from sems_vision.multiprocess_frame_srcs import MultiprocessFrameSrcs
-from dataclasses import dataclass
-
-
-
-
-
 
 logger = get_logger()
 
@@ -23,6 +14,7 @@ camera_service_config = config['camera_service']
 
 camera_service = CameraService(camera_service_config['hostname'], camera_service_config['port'],
                                camera_service_config['use_https'])
+
 logger.info('loading cameras')
 
 cameras = camera_service.get_cameras()

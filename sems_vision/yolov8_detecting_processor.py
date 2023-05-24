@@ -12,7 +12,7 @@ class YoloV8DetectingProcessor:
 
         self.__process_height: int | None = process_height
 
-        self.nms_threshold = nms_threshold
+        self.nms_threshold = nms_thresho6d
 
         self.confidence_threshold = confidence_threshold
 

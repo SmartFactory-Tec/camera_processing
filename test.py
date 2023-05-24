@@ -8,7 +8,7 @@ from sems_vision.centroid_tracking_frame_processor import CentroidTrackingFrameP
 
 def main():
     # frame_src = camera_server_frame_src('10.22.244.185', 3002, 4)
-    frame_src = camera_server_frame_src('localhost', 3001, 6)
+    frame_src = camera_server_frame_src('localhost', 3000, 6)
 
     detector = YoloV8DetectingProcessor(0.5, 0.5)
     detecting_processor = detector.process(frame_src, skip_frames=60)
