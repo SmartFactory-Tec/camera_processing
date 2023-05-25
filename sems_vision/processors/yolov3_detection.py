@@ -7,7 +7,7 @@ from sems_vision.frame_packet import FramePacketGenerator
 from sems_vision.detection import Detection, BoundingBox
 
 
-class YoloV3DetectingProcessor:
+class YoloV3DetectionProcessor:
     PERSON_CLASS_ID = 0
 
     def __init__(self, confidence_threshold: float, nms_threshold: float):
@@ -55,7 +55,7 @@ class YoloV3DetectingProcessor:
                     class_id = np.argmax(scores)
                     confidence = scores[class_id]
 
-                    if confidence > self.confidence_threshold and class_id == YoloV3DetectingProcessor.PERSON_CLASS_ID:
+                    if confidence > self.confidence_threshold and class_id == YoloV3DetectionProcessor.PERSON_CLASS_ID:
                         # compute the (x, y)-coordinates of the bounding box
                         # for the object
                         box = np.array(raw_detections[0:4]) * np.array(

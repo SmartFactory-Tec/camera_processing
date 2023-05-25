@@ -1,17 +1,17 @@
 from collections import OrderedDict
+from typing import Optional
+from sems_vision.detection_centroid_tracker import Centroid, DetectionCentroidTracker
+from sems_vision.frame_packet import FramePacketGenerator
 
-from sems_vision import Centroid, DetectionCentroidTracker, FramePacketGenerator
-import cv2
 
-
-class CentroidTrackingFrameProcessor:
+class CentroidTrackerProcessor:
     """
     CentroidTrackerFrameProcessor associates Detection objects to Centroid objects, maintaining an ID using the given
     centroid object tracking algorithm
     """
 
-    def __init__(self, max_dissapeared_frames = 50, max_distance = 100):
-        self.frame_shape: tuple[int, int] | None = None
+    def __init__(self, max_disappeared_frames=50, max_distance=100):
+        self.frame_shape: Optional[tuple[int, int]] = None
 
         self.people_in_frame_time_avg = 0
         self.people_count = 0
@@ -23,7 +23,8 @@ class CentroidTrackingFrameProcessor:
         self.do_distance_violation = True
         self._removed_centroids: OrderedDict[int, Centroid] = OrderedDict()
 
-        self._tracker = DetectionCentroidTracker(max_disappeared_frames=max_dissapeared_frames, max_distance=max_distance,
+        self._tracker = DetectionCentroidTracker(max_disappeared_frames=max_disappeared_frames,
+                                                 max_distance=max_distance,
                                                  on_centroid_removed=self._on_centroid_removed)
 
     def process(self, source: FramePacketGenerator, detections_key='detections',

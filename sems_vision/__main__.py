@@ -1,57 +1,58 @@
 import signal
-from multiprocessing import Process, Event
-from sems_vision import load_config, CameraService, imshow_pipeline_executor, \
-    get_logger, TrackingFrameProcessor, YoloV3DetectingProcessor, Camera
-from sems_vision.centroid_tracking_frame_processor import CentroidTrackingFrameProcessor
-from sems_vision.multiprocess_frame_srcs import MultiprocessFrameSrcs
+from multiprocessing import Process
+import requests.exceptions
+from .executors import pipeline_executor
+from .logger import get_logger
+from .config_loader import load_config
+from .camera_service import CameraService
+from .camera_server_frame_src import camera_server_frame_src
+from .processors import YoloV8DetectionProcessor, DetectionCorrelationTrackerProcessor, CentroidTrackerProcessor, \
+    centroid_exit_direction_processor
+from .processors.detection_exit_logger import detection_exit_logger_processor
 
 logger = get_logger()
 
-config = load_config()
-logger.info('loaded config')
+config = load_config(logger)
 
-camera_service_config = config['camera_service']
+camera_service = CameraService(config.camera_service)
 
-camera_service = CameraService(camera_service_config['hostname'], camera_service_config['port'],
-                               camera_service_config['use_https'])
+try:
+    cameras = camera_service.get_cameras()
+except requests.exceptions.ConnectionError:
+    logger.error("unable to connect to connect to camera_service at %s", camera_service.url)
+    exit(1)
 
-logger.info('loading cameras')
+logger.info("initializing processes for %d cameras registered in camera_service", len(cameras),
+            camera_service_url=camera_service.url)
 
-cameras = camera_service.get_cameras()
-
-# ignore interrupt signal in all child threads
 main_signal_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
 process_handles: list[Process] = []
-with MultiprocessFrameSrcs(cameras) as frame_srcs:
-    for camera in cameras:
-        src = frame_srcs.frame_src(camera.id)
-        detector = YoloV3DetectingProcessor(0.6, 0.1)
-        tracker = TrackingFrameProcessor()
-        centroidTracker = CentroidTrackingFrameProcessor()
+for camera in cameras:
+    log2 = logger.bind(id=camera.id, name=camera.name)
+    log2.debug("initializing camera")
+    frame_src = camera_server_frame_src('localhost', 3001, camera.id)
+    detector = YoloV8DetectionProcessor(0.5, 0.5)
+    detecting_processor = detector.process(frame_src, skip_frames=60)
+    tracker = DetectionCorrelationTrackerProcessor()
+    tracking_processor = tracker.process(detecting_processor)
+    centroid_tracker = CentroidTrackerProcessor(max_disappeared_frames=90, max_distance=150)
+    centroid_processor = centroid_tracker.process(tracking_processor)
+    exit_processor = centroid_exit_direction_processor(centroid_processor)
+    detection_logger = detection_exit_logger_processor(exit_processor, camera, logger)
+    executor = pipeline_executor(detection_logger)
 
-        detect = detector.process(src)
-        # track = tracker.process(detect)
-        # centroidTrack = centroidTracker.process(track)
-        # count = centroid_count_processor(centroidTrack)
+    pipeline_process = Process(target=executor)
 
-        executor = imshow_pipeline_executor(detect)
-
-        pipeline_process = Process(target=executor)
-
-        process_handles.append(pipeline_process)
-        pipeline_process.start()
-        print("added camera")
+    process_handles.append(pipeline_process)
+    pipeline_process.start()
+    log2.debug("started camera process")
 
     signal.signal(signal.SIGINT, main_signal_handler)
-    try:
-        signal.pause()
-    except KeyboardInterrupt:
-        print("exiting...")
 
-for process in process_handles:
-    process.join()
+try:
+    signal.pause()
+except KeyboardInterrupt:
+    logger.info("exiting...")
 
-# for camera in cameras:
-#     vs = cv2.VideoCapture(camera.connection_string)
-#     vs.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
-#     captures.append(vs)
+for processors in process_handles:
+    processors.join()

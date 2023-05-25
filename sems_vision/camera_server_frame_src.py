@@ -7,7 +7,7 @@ from aioice import Candidate
 from aiortc import RTCPeerConnection, MediaStreamTrack, RTCSessionDescription, RTCConfiguration, RTCIceServer
 from aiortc.rtcicetransport import candidate_from_aioice
 from aiortc.mediastreams import MediaStreamError
-from sems_vision import FramePacket
+from .frame_packet import FramePacket
 
 
 async def get_track(peer_connection: RTCPeerConnection) -> MediaStreamTrack:

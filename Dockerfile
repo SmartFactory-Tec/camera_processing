@@ -76,7 +76,7 @@ RUN make install && ldconfig
 RUN rm -rf /opencv-${OPENCV}/build
 RUN rm -rf /opencv_contrib-${OPENCV}/modules
 
-# Copy sems-vision project
+# Copy sems-processors project
 WORKDIR /sems-vision
 
 COPY Pipfile Pipfile

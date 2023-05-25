@@ -2,7 +2,7 @@ from typing import Callable
 
 import cv2
 
-from sems_vision import FramePacketGenerator
+from .frame_packet import FramePacketGenerator
 
 
 def pipeline_executor(source: FramePacketGenerator) -> Callable:

@@ -19,7 +19,7 @@ class Centroid:
     creation_time: float = field(default_factory=time)
 
 
-def detection_to_centroid(detection: Detection):
+def detection_centroid(detection: Detection):
     [x1, y1, x2, y2] = detection.bounding_box
     x = floor((x1 + x2) / 2.0)
     y = floor((y1 + y2) / 2.0)
@@ -70,14 +70,14 @@ class DetectionCentroidTracker:
             return
 
         # convert the incoming detections into new centroids
-        new_centroids = list(detection_to_centroid(detection) for detection in detections)
+        new_centroids = list(detection_centroid(detection) for detection in detections)
         new_centroids_pos = list(centroid.pos for centroid in new_centroids)
 
         # if we are currently not tracking any objects take the input
         # centroids and register each of them
         if len(self.centroids) == 0:
             for detection in detections:
-                self._register_centroid(detection_to_centroid(detection))
+                self._register_centroid(detection_centroid(detection))
             return
 
         # otherwise, are currently tracking objects, so we need to

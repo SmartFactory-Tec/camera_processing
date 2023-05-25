@@ -1,14 +1,14 @@
 from math import floor
-
 import cv2
 import dlib
 from sems_vision.detection import Detection
 from sems_vision.frame_packet import FramePacketGenerator
+from typing import Optional
 
 
-class TrackingFrameProcessor:
+class DetectionCorrelationTrackerProcessor:
     def __init__(self):
-        self.frame_shape: tuple[int, int] | None = None
+        self.frame_shape: Optional[tuple[int, int]] = None
         self.trackers: list[dlib.correlation_tracker] = []
         self.detections: list[Detection] = []
 

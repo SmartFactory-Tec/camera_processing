@@ -7,7 +7,7 @@ from sems_vision.frame_packet import FramePacketGenerator
 from sems_vision.detection import Detection, BoundingBox
 
 
-class YoloV8DetectingProcessor:
+class YoloV8DetectionProcessor:
     def __init__(self, confidence_threshold: float, nms_threshold: float, process_height: Optional[int] = 640):
         self.__model = YOLO('yolov8n.pt')
 
