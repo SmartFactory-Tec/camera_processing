@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from time import time
+import datetime
 from typing import Any, Generator, Union
 import numpy as np
 
@@ -8,7 +8,7 @@ import numpy as np
 class FramePacket:
     frame: np.ndarray
     values: dict[str, Any] = field(default_factory=dict)
-    timestamp: float = field(default_factory=time)
+    timestamp: datetime = field(default_factory=datetime.datetime.now)
 
 
 FramePacketProcessor = Generator[FramePacket, FramePacket, None]

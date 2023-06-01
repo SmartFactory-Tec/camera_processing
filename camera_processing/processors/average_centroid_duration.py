@@ -1,5 +1,5 @@
 import time
-from sems_vision.frame_packet import FramePacketGenerator
+from camera_processing.frame_packet import FramePacketGenerator
 
 
 def average_centroid_duration_processor(source: FramePacketGenerator, centroids_value_name='centroids',

@@ -1,4 +1,4 @@
-from sems_vision.frame_packet import FramePacketGenerator
+from camera_processing.frame_packet import FramePacketGenerator
 
 
 def centroid_exit_direction_processor(source: FramePacketGenerator, centroids_key='centroids',

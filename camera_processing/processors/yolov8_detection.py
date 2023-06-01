@@ -3,8 +3,8 @@ import numpy as np
 from ultralytics import YOLO
 from typing import Optional
 from math import floor
-from sems_vision.frame_packet import FramePacketGenerator
-from sems_vision.detection import Detection, BoundingBox
+from camera_processing.frame_packet import FramePacketGenerator
+from camera_processing.detection import Detection, BoundingBox
 
 
 class YoloV8DetectionProcessor:
@@ -35,7 +35,7 @@ class YoloV8DetectionProcessor:
                     floor(frame.shape[1] * resize_factor), floor(frame.shape[0] * resize_factor)),
                                    interpolation=cv2.INTER_LINEAR)
 
-            predictions = self.__model.predict(source=frame)[0].boxes
+            predictions = self.__model.predict(source=frame, verbose=False)[0].boxes
 
             bounding_boxes: list[BoundingBox] = []
             confidences: list[float] = []

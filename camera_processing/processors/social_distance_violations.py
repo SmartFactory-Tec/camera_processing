@@ -2,7 +2,7 @@ import numpy as np
 
 from scipy.spatial.distance import cdist
 
-from sems_vision.frame_packet import FramePacketGenerator
+from camera_processing.frame_packet import FramePacketGenerator
 
 
 # TODO implement inverse projection mapping

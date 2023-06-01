@@ -6,7 +6,7 @@ from threading import Thread
 import cv2
 import numpy as np
 
-from sems_vision import Camera, FramePacket
+from camera_processing import Camera, FramePacket
 
 
 class MultiprocessFrameSrcs:

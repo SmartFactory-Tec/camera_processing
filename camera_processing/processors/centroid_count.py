@@ -1,7 +1,7 @@
 from collections import OrderedDict
 
-from sems_vision.frame_packet import FramePacketGenerator
-from sems_vision.detection_centroid_tracker import Centroid
+from camera_processing.frame_packet import FramePacketGenerator
+from camera_processing.detection_centroid_tracker import Centroid
 
 
 def centroid_count_processor(source: FramePacketGenerator, centroids_key='centroids',

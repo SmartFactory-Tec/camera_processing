@@ -88,7 +88,7 @@ RUN pipenv install --system --deploy --ignore-pipfile
 # Use gunicorn as the WSGI server
 RUN pip install gunicorn
 
-COPY sems_vision sems_vision
+COPY camera_processing sems_vision
 COPY models models
 COPY static static
 COPY templates templates

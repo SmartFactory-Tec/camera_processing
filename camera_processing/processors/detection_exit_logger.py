@@ -1,5 +1,5 @@
-from sems_vision.frame_packet import FramePacketGenerator
-from sems_vision.camera import Camera
+from camera_processing.frame_packet import FramePacketGenerator
+from camera_processing.camera import Camera
 
 
 def detection_exit_logger_processor(source: FramePacketGenerator, camera: Camera, logger, left_exit_count_key='left_exit_count',

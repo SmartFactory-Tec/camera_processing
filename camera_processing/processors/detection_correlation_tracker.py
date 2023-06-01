@@ -1,8 +1,8 @@
 from math import floor
 import cv2
 import dlib
-from sems_vision.detection import Detection
-from sems_vision.frame_packet import FramePacketGenerator
+from camera_processing.detection import Detection
+from camera_processing.frame_packet import FramePacketGenerator
 from typing import Optional
 
 

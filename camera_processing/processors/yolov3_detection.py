@@ -3,8 +3,8 @@ from math import floor
 import cv2
 import numpy as np
 
-from sems_vision.frame_packet import FramePacketGenerator
-from sems_vision.detection import Detection, BoundingBox
+from camera_processing.frame_packet import FramePacketGenerator
+from camera_processing.detection import Detection, BoundingBox
 
 
 class YoloV3DetectionProcessor:

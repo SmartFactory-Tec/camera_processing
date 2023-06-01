@@ -7,14 +7,14 @@ from .config import Config
 # Resolve default configuration folder
 HOME_PATH = os.environ["HOME"]
 
-if "SEMS_CONFIG_FOLDER" in os.environ:
-    CONFIG_PATH = os.environ["SEMS_CONFIG_FOLDER"]
+if "CAMERA_PROCESSING_CONFIG_FOLDER" in os.environ:
+    CONFIG_PATH = os.environ["CAMERA_PROCESSING_CONFIG_FOLDER"]
 else:
     CONFIG_PATH = os.environ["XDG_CONFIG_HOME"] \
         if "XDG_CONFIG_HOME" in os.environ \
         else os.path.join(HOME_PATH,
                           '.config')
-    CONFIG_PATH = os.path.join(CONFIG_PATH, 'sems-processors')
+    CONFIG_PATH = os.path.join(CONFIG_PATH, 'camera_processing')
 
 CONFIG_FILE = os.path.join(CONFIG_PATH, "config.toml")
 
@@ -24,7 +24,7 @@ DEFAULT_CONFIG = {
         'port': 3000,
         'use_https': False,
     },
-    'camera_server': {
+    'camera_streamer': {
         'hostname': 'localhost',
         'port': 3001,
         'use_https': False,

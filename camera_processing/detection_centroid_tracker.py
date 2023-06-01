@@ -9,7 +9,7 @@ from scipy.spatial import distance as dist
 from collections import OrderedDict
 from collections.abc import Callable
 
-from sems_vision.detection import Detection
+from camera_processing.detection import Detection
 
 
 @dataclass

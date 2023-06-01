@@ -1,11 +1,20 @@
+import datetime
+
 import requests
 from dacite import from_dict
 from dataclasses import dataclass
 from .camera import Camera
+from enum import StrEnum
 
 
 class InvalidResponseError(Exception):
     pass
+
+
+class Direction(StrEnum):
+    LEFT = 'left'
+    RIGHT = 'right'
+    NONE = 'none'
 
 
 @dataclass
@@ -34,3 +43,13 @@ class CameraService:
             cameras.append(camera)
 
         return cameras
+
+    def post_detection(self, camera_id: int, detection_date: datetime.datetime, target_direction: Direction):
+        response = requests.post(self.url + f'/cameras/{camera_id}/personDetections', json={
+            'camera_id': camera_id,
+            'detection_date': detection_date.astimezone().isoformat(),
+            'target_direction': target_direction
+        })
+
+        if response.status_code != 201:
+            raise RuntimeError(f'could not post detection to camera_service, with status code {response.status_code}')

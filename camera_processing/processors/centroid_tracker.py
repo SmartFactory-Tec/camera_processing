@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Optional
-from sems_vision.detection_centroid_tracker import Centroid, DetectionCentroidTracker
-from sems_vision.frame_packet import FramePacketGenerator
+from camera_processing.detection_centroid_tracker import Centroid, DetectionCentroidTracker
+from camera_processing.frame_packet import FramePacketGenerator
 
 
 class CentroidTrackerProcessor:
