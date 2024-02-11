@@ -17,13 +17,14 @@ psutil = "*"
 PyYAML = "*"
 requests = "*"
 scipy = "*"
-aiortc = "*"
+aiortc = "~=1.5.0"
 dlib = "*"
 pandas = "*"
 structlog = "*"
 dacite = "*"
 toml = "*"
 aiohttp = "*"
+pykafka = "*"
 
 [cuda-packages] # Packages that require cuda 11.8 installed
 torch = { index = "pytorch", version = "*" }

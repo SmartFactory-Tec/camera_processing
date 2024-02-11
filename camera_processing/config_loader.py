@@ -29,9 +29,10 @@ DEFAULT_CONFIG = {
         'port': 3001,
         'use_https': False,
     },
+    'kafka': {
+        'hostnames': ['localhost:9092']
+    }
 }
-
-
 
 
 def load_config(logger) -> Config:

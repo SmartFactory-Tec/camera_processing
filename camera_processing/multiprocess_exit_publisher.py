@@ -11,7 +11,7 @@ class PersonDetection:
     target_direction: Direction
 
 
-class MultiprocessDetectionPublisher:
+class PersonDetectionPublisher:
     def __init__(self, camera_service: CameraService):
         self.__camera_service = camera_service
         self.__publishing_queue: Queue[PersonDetection] = Queue()

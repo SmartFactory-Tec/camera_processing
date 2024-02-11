@@ -1,13 +1,13 @@
-from camera_processing.MultiprocessDetectionPublisher import MultiprocessDetectionPublisher
+from camera_processing.multiprocess_exit_publisher import PersonDetectionPublisher
 from camera_processing.camera import Camera
 from camera_processing.camera_service import Direction
 from camera_processing.frame_packet import FramePacketGenerator
 
 
-def detection_exit_publisher_processor(source: FramePacketGenerator, publisher: MultiprocessDetectionPublisher,
-                                       camera: Camera, logger, left_exit_count_key='left_exit_count',
-                                       right_exit_count_key='right_exit_count',
-                                       unknown_exit_count_key='unknown_exit_count'):
+def exit_publisher_processor(source: FramePacketGenerator, publisher: PersonDetectionPublisher,
+                             camera: Camera, logger, left_exit_count_key='left_exit_count',
+                             right_exit_count_key='right_exit_count',
+                             unknown_exit_count_key='unknown_exit_count'):
     logger = logger.bind(camera_id=camera.id, camera_name=camera.name)
     for packet in source:
         right_exits = packet.values[right_exit_count_key]

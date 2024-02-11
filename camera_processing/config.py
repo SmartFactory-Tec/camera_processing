@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from . import camera_service
 
+
 @dataclass
 class CameraStreamerConfig:
     hostname: str
@@ -9,6 +10,12 @@ class CameraStreamerConfig:
 
 
 @dataclass
+class KafkaConfig:
+    hostnames: list[str]
+
+
+@dataclass
 class Config:
+    # kafka: KafkaConfig
     camera_service: camera_service.Config
     camera_streamer: CameraStreamerConfig

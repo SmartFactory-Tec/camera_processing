@@ -17,13 +17,14 @@ class YoloV8DetectionProcessor:
 
         self.confidence_threshold = confidence_threshold
 
-    def process(self, source: FramePacketGenerator, skip_frames=24, detections_key='detections'):
+    def process(self, source: FramePacketGenerator, skip_frames=4, detections_key='detections'):
         frame_counter = 1
         for packet in source:
-            frame_counter %= skip_frames
-            if frame_counter == 0:
-                yield packet
             frame_counter += 1
+            frame_counter %= skip_frames
+            if frame_counter != 0:
+                yield packet
+                continue
 
             frame: np.ndarray = packet.frame
             resize_factor: Optional[float] = None

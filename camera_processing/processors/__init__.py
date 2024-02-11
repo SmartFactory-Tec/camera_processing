@@ -6,3 +6,5 @@ from .detection_correlation_tracker import *
 from .social_distance_violations import *
 from .yolov3_detection import *
 from .yolov8_detection import *
+from .kafka_publisher import *
+from .exit_publisher import *

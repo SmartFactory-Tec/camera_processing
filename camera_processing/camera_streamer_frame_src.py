@@ -26,6 +26,7 @@ async def get_track(peer_connection: RTCPeerConnection, logger: any = None) -> M
 async def perform_signaling(ws, peer_connection, signaling_future, logger: any = None):
     @peer_connection.on("connectionstatechange")
     def on_connection_state_change():
+        logger.debug(peer_connection.connectionState)
         if peer_connection.connectionState == 'connected':
             logger.debug("succesfully connected to webrtc stream")
             signaling_future.set_result(None)
@@ -89,8 +90,6 @@ async def async_camera_streamer_frame_src(hostname: str, port: int, camera_id: i
             perform_signaling(ws, peer_connection, signaling_future, logger))
 
         track = await track_task
-        await signaling_future
-
         while True:
             try:
                 frame = await track.recv()
